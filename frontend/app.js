@@ -74,6 +74,7 @@ async function initScanState() {
       // If cached duplicate results exist, immediately restore and display them!
       if (data.duplicate_groups && data.duplicate_groups.length > 0) {
         duplicateGroups = data.duplicate_groups;
+        autoSelectLowerQuality(false);
         updateStats();
         renderDuplicateGroups();
       }
@@ -132,20 +133,10 @@ function setupEventListeners() {
     });
   });
 
-  btnSmartSelect.addEventListener('click', autoSelectLowerQuality);
+  btnSmartSelect.addEventListener('click', () => autoSelectLowerQuality(false));
   btnClearSelection.addEventListener('click', clearSelection);
-  // Event delegation for duplicate candidate file selection
-  duplicateGroupsList.addEventListener('click', (e) => {
-    const row = e.target.closest('.file-row');
-    if (!row) return;
-    const encodedPath = row.getAttribute('data-encoded-path');
-    if (!encodedPath) return;
-    const fullPath = decodeURIComponent(encodedPath);
-    const item = window.mediaItemsByPath?.get(fullPath);
-    if (item) {
-      toggleFileSelection(fullPath, item.size_bytes, item.filename);
-    }
-  });
+  // High-performance event delegation for duplicate candidate file & group selection
+  duplicateGroupsList.addEventListener('click', handleDuplicateListClick);
 
   btnDeleteSelected.addEventListener('click', openDeleteModal);
 
@@ -337,6 +328,7 @@ async function pollScanStatus() {
     // Real-time duplicate streaming: render duplicate candidates as soon as they are discovered!
     if (data.duplicate_groups && data.duplicate_groups.length !== duplicateGroups.length) {
       duplicateGroups = data.duplicate_groups;
+      autoSelectLowerQuality(false);
       updateStats();
       renderDuplicateGroups();
     }
@@ -353,6 +345,7 @@ async function pollScanStatus() {
       scanProgressBanner.classList.add('hidden');
 
       duplicateGroups = data.duplicate_groups || [];
+      autoSelectLowerQuality(false);
       updateStats();
       renderDuplicateGroups();
     }
@@ -443,8 +436,12 @@ function renderDuplicateGroups() {
       `;
     }).join('');
 
+    const hasSelectedInGroup = group.items.some(it => selectedFilesForDeletion.has(it.path));
+    const toggleBtnText = hasSelectedInGroup ? '✕ Deselect Group' : '✓ Select Duplicates';
+    const toggleBtnClass = hasSelectedInGroup ? 'btn-group-toggle is-selected' : 'btn-group-toggle';
+
     return `
-      <div class="duplicate-group-card">
+      <div class="duplicate-group-card" data-group-idx="${groupIdx}">
         <div class="group-header">
           <div class="group-title">${escapeHtml(group.title)}</div>
           <div class="group-meta">
@@ -452,6 +449,9 @@ function renderDuplicateGroups() {
               ${escapeHtml(group.match_reason)}
             </span>
             <span class="group-reclaimable">Reclaimable: ${group.reclaimable_human}</span>
+            <button type="button" class="${toggleBtnClass}" data-group-idx="${groupIdx}" title="${hasSelectedInGroup ? 'Click to uncheck all files in this group' : 'Click to check duplicate versions in this group'}">
+              ${toggleBtnText}
+            </button>
           </div>
         </div>
         <div class="group-files-list">
@@ -489,18 +489,119 @@ function formatBytes(bytes) {
   return `${bytes.toFixed(2)} ${units[i]}`;
 }
 
-// Selection Logic
-window.toggleFileSelection = function(path, size, filename) {
-  if (selectedFilesForDeletion.has(path)) {
-    selectedFilesForDeletion.delete(path);
-  } else {
-    selectedFilesForDeletion.set(path, { size, filename });
+// Ultra-fast In-Place Selection Logic (Zero Full Re-renders on Clicks)
+function handleDuplicateListClick(e) {
+  // 1. Group toggle button clicked
+  const groupBtn = e.target.closest('.btn-group-toggle');
+  if (groupBtn) {
+    e.stopPropagation();
+    const groupCard = groupBtn.closest('.duplicate-group-card');
+    if (groupCard) toggleGroupSelection(groupCard);
+    return;
   }
-  updateSelectedCounter();
-  renderDuplicateGroups();
-};
 
-function autoSelectLowerQuality() {
+  // 2. File row clicked
+  const row = e.target.closest('.file-row');
+  if (!row) return;
+
+  const encodedPath = row.getAttribute('data-encoded-path');
+  if (!encodedPath) return;
+  const fullPath = decodeURIComponent(encodedPath);
+  const item = window.mediaItemsByPath?.get(fullPath);
+  if (!item) return;
+
+  const isCheckbox = e.target.classList.contains('file-select-checkbox');
+  const groupCard = row.closest('.duplicate-group-card');
+
+  if (isCheckbox) {
+    // Checkbox state was flipped natively by the browser click event
+    const isNowChecked = e.target.checked;
+    if (isNowChecked) {
+      selectedFilesForDeletion.set(fullPath, { size: item.size_bytes, filename: item.filename });
+      row.classList.add('marked-delete');
+    } else {
+      selectedFilesForDeletion.delete(fullPath);
+      row.classList.remove('marked-delete');
+    }
+  } else {
+    // Row clicked outside checkbox
+    const wasChecked = selectedFilesForDeletion.has(fullPath);
+    const chk = row.querySelector('.file-select-checkbox');
+    if (wasChecked) {
+      selectedFilesForDeletion.delete(fullPath);
+      row.classList.remove('marked-delete');
+      if (chk) chk.checked = false;
+    } else {
+      selectedFilesForDeletion.set(fullPath, { size: item.size_bytes, filename: item.filename });
+      row.classList.add('marked-delete');
+      if (chk) chk.checked = true;
+    }
+  }
+
+  if (groupCard) updateGroupCardHeaderButton(groupCard);
+  updateSelectedCounter();
+}
+
+function updateGroupCardHeaderButton(groupCard) {
+  if (!groupCard) return;
+  const btn = groupCard.querySelector('.btn-group-toggle');
+  if (!btn) return;
+  const hasSelected = groupCard.querySelectorAll('.file-row.marked-delete').length > 0;
+  if (hasSelected) {
+    btn.textContent = '✕ Deselect Group';
+    btn.classList.add('is-selected');
+    btn.title = 'Click to uncheck all files in this group';
+  } else {
+    btn.textContent = '✓ Select Duplicates';
+    btn.classList.remove('is-selected');
+    btn.title = 'Click to check duplicate versions in this group';
+  }
+}
+
+function toggleGroupSelection(groupCard) {
+  if (!groupCard) return;
+  const rows = Array.from(groupCard.querySelectorAll('.file-row'));
+  if (!rows.length) return;
+
+  const markedRows = groupCard.querySelectorAll('.file-row.marked-delete');
+  const hasSelected = markedRows.length > 0;
+
+  if (hasSelected) {
+    // Deselect all files in this group
+    rows.forEach(row => {
+      const encodedPath = row.getAttribute('data-encoded-path');
+      if (!encodedPath) return;
+      const fullPath = decodeURIComponent(encodedPath);
+      selectedFilesForDeletion.delete(fullPath);
+      row.classList.remove('marked-delete');
+      const chk = row.querySelector('.file-select-checkbox');
+      if (chk) chk.checked = false;
+    });
+  } else {
+    // Select all non-keep files in this group
+    const hasKeepBadge = rows.some(r => r.querySelector('.badge-keep'));
+    rows.forEach((row, idx) => {
+      const isKeep = hasKeepBadge ? !!row.querySelector('.badge-keep') : (idx === 0);
+      if (!isKeep) {
+        const encodedPath = row.getAttribute('data-encoded-path');
+        if (!encodedPath) return;
+        const fullPath = decodeURIComponent(encodedPath);
+        const item = window.mediaItemsByPath?.get(fullPath);
+        if (item) {
+          selectedFilesForDeletion.set(fullPath, { size: item.size_bytes, filename: item.filename });
+        }
+        row.classList.add('marked-delete');
+        const chk = row.querySelector('.file-select-checkbox');
+        if (chk) chk.checked = true;
+      }
+    });
+  }
+
+  updateGroupCardHeaderButton(groupCard);
+  updateSelectedCounter();
+}
+
+function autoSelectLowerQuality(reRender = false) {
   selectedFilesForDeletion.clear();
 
   duplicateGroups.forEach(group => {
@@ -512,7 +613,7 @@ function autoSelectLowerQuality() {
       return b.size_bytes - a.size_bytes;
     });
 
-    // Best item is index 0; mark all others (indices 1..) for deletion
+    // Best item is index 0 (Keep); mark all other duplicate items (indices 1..) for deletion
     for (let i = 1; i < sorted.length; i++) {
       const item = sorted[i];
       selectedFilesForDeletion.set(item.path, { size: item.size_bytes, filename: item.filename });
@@ -520,13 +621,41 @@ function autoSelectLowerQuality() {
   });
 
   updateSelectedCounter();
-  renderDuplicateGroups();
+
+  if (reRender) {
+    renderDuplicateGroups();
+  } else {
+    // Fast in-place DOM update without tearing down the entire DOM
+    const allCards = duplicateGroupsList.querySelectorAll('.duplicate-group-card');
+    allCards.forEach(card => {
+      const rows = Array.from(card.querySelectorAll('.file-row'));
+      const hasKeepBadge = rows.some(r => r.querySelector('.badge-keep'));
+      rows.forEach((row, idx) => {
+        const isKeep = hasKeepBadge ? !!row.querySelector('.badge-keep') : (idx === 0);
+        const shouldDelete = !isKeep;
+        row.classList.toggle('marked-delete', shouldDelete);
+        const chk = row.querySelector('.file-select-checkbox');
+        if (chk) chk.checked = shouldDelete;
+      });
+      updateGroupCardHeaderButton(card);
+    });
+  }
 }
 
 function clearSelection() {
   selectedFilesForDeletion.clear();
   updateSelectedCounter();
-  renderDuplicateGroups();
+
+  // Instant in-place DOM update
+  const markedRows = duplicateGroupsList.querySelectorAll('.file-row.marked-delete');
+  markedRows.forEach(row => {
+    row.classList.remove('marked-delete');
+    const chk = row.querySelector('.file-select-checkbox');
+    if (chk) chk.checked = false;
+  });
+
+  const groupCards = duplicateGroupsList.querySelectorAll('.duplicate-group-card');
+  groupCards.forEach(card => updateGroupCardHeaderButton(card));
 }
 
 function updateSelectedCounter() {
@@ -597,6 +726,7 @@ async function executeSafeDeletion() {
 
       // Update remaining duplicates list
       duplicateGroups = data.remaining_groups || [];
+      autoSelectLowerQuality(false);
       updateStats();
       renderDuplicateGroups();
 

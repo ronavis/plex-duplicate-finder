@@ -634,6 +634,8 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-bottom: 12px;
   padding-bottom: 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
@@ -648,6 +650,7 @@ body {
 .group-meta {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -655,6 +658,42 @@ body {
   font-size: 0.82rem;
   color: var(--plex-gold);
   font-weight: 600;
+}
+
+/* Group Quick Toggle Button */
+.btn-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btn-group-toggle:hover {
+  background: rgba(229, 160, 13, 0.15);
+  border-color: var(--plex-gold);
+  color: var(--plex-gold);
+}
+
+.btn-group-toggle.is-selected {
+  background: rgba(244, 63, 94, 0.12);
+  border-color: rgba(244, 63, 94, 0.35);
+  color: #fda4af;
+}
+
+.btn-group-toggle.is-selected:hover {
+  background: rgba(244, 63, 94, 0.22);
+  border-color: #f43f5e;
+  color: #fff;
 }
 
 .group-files-list {
@@ -674,6 +713,15 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.04);
   font-size: 0.82rem;
   transition: background var(--transition-fast), border-color var(--transition-fast);
+  cursor: pointer;
+  user-select: none;
+}
+
+.file-select-checkbox {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--plex-gold);
+  cursor: pointer;
 }
 
 .file-row:hover {
