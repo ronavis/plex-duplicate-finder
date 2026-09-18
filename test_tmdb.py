@@ -48,6 +48,12 @@ class TestTmdbApi(unittest.TestCase):
         # Restore original
         client.save_config(orig_key, enabled=orig_enabled, priority="plex_first")
 
+    def test_backdrop_methods(self):
+        client = tmdb_api.TmdbClient()
+        self.assertIsNone(client.search_backdrop(""))
+        self.assertIsNone(client.get_backdrop_data(""))
+        self.assertIsNone(client.get_backdrop_by_title(""))
+
 
 if __name__ == "__main__":
     unittest.main()

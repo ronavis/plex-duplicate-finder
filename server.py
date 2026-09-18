@@ -77,6 +77,49 @@ def _sync_balancer_completion(src_path: str, dest_path: str):
             pass
 
 
+def record_deletion_audit(
+    action: str,
+    items: list,
+    reclaimed_bytes: int,
+    use_recycle_bin: bool = True,
+    extra: dict = None
+):
+    """Safely append an operation entry to the persistent deletion audit log."""
+    if not items:
+        return
+
+    audit_entry = {
+        "timestamp": int(time.time()),
+        "date": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "action": action,
+        "files_count": len(items),
+        "reclaimed_bytes": reclaimed_bytes,
+        "reclaimed_human": scanner.format_bytes(reclaimed_bytes),
+        "use_recycle_bin": use_recycle_bin,
+        "safety_method": "Recycle Bin" if use_recycle_bin else "Permanent / Direct Reclaim",
+        "items": items
+    }
+    if extra:
+        audit_entry.update(extra)
+
+    try:
+        records = []
+        if AUDIT_FILE.exists():
+            try:
+                with open(AUDIT_FILE, "r", encoding="utf-8") as f:
+                    records = json.load(f)
+                    if not isinstance(records, list):
+                        records = []
+            except Exception:
+                records = []
+        records.insert(0, audit_entry)
+        records = records[:500]  # Store up to 500 recent events
+        with open(AUDIT_FILE, "w", encoding="utf-8") as f:
+            json.dump(records, f, indent=2)
+    except Exception as e:
+        print(f"[Audit] Log write error: {e}")
+
+
 class PlexDedupHandler(SimpleHTTPRequestHandler):
     """Custom request handler supporting REST API endpoints and web UI serving."""
 
@@ -118,9 +161,20 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
                 try:
                     with open(AUDIT_FILE, "r", encoding="utf-8") as f:
                         records = json.load(f)
+                        if not isinstance(records, list):
+                            records = []
                 except Exception:
                     records = []
-            self._send_json(200, {"status": "ok", "records": records})
+            total_reclaimed = sum(r.get("reclaimed_bytes", 0) for r in records)
+            total_files = sum(r.get("files_count", len(r.get("items", []))) for r in records)
+            self._send_json(200, {
+                "status": "ok",
+                "records": records,
+                "total_events": len(records),
+                "total_files": total_files,
+                "total_reclaimed_bytes": total_reclaimed,
+                "total_reclaimed_human": scanner.format_bytes(total_reclaimed)
+            })
 
         # Feature 2: Plex Status
         elif path == "/api/plex/status":
@@ -263,6 +317,58 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
                 return
             self._send_json(404, {"status": "not_found", "message": "TMDb poster not found"})
 
+        # Feature: 16:9 Hero Backdrop Proxy (TMDb / Plex Fanart)
+        elif path == "/api/media/hero":
+            title = query.get("title", [""])[0]
+            year_str = query.get("year", [""])[0]
+            year = int(year_str) if year_str.isdigit() else None
+            prefer_tmdb = query.get("source", [""])[0] == "tmdb" or tmdb_api.tmdb_client.priority == "tmdb_first"
+
+            # 1. Try TMDb first if preferred and configured
+            if prefer_tmdb and tmdb_api.tmdb_client.is_configured():
+                img_data = tmdb_api.tmdb_client.get_backdrop_by_title(title, year, size="w1280")
+                if img_data:
+                    data, ctype = img_data
+                    self.send_response(200)
+                    self.send_header("Content-Type", ctype)
+                    self.send_header("Content-Length", str(len(data)))
+                    self.send_header("Cache-Control", "public, max-age=86400")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+
+            # 2. Try Plex server fanart / backdrop
+            art = plex_api.plex_client.search_hero_art(title, year)
+            if art:
+                img_data = plex_api.plex_client.get_thumbnail_data(art)
+                if img_data:
+                    data, ctype = img_data
+                    self.send_response(200)
+                    self.send_header("Content-Type", ctype)
+                    self.send_header("Content-Length", str(len(data)))
+                    self.send_header("Cache-Control", "public, max-age=86400")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+
+            # 3. Fallback: If Plex did not have art, try TMDb
+            if tmdb_api.tmdb_client.is_configured():
+                img_data = tmdb_api.tmdb_client.get_backdrop_by_title(title, year, size="w1280")
+                if img_data:
+                    data, ctype = img_data
+                    self.send_response(200)
+                    self.send_header("Content-Type", ctype)
+                    self.send_header("Content-Length", str(len(data)))
+                    self.send_header("Cache-Control", "public, max-age=86400")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+
+            self._send_json(404, {"status": "not_found", "message": "Hero backdrop not found"})
+
         else:
             # Fallback to serving static frontend files
             super().do_GET()
@@ -355,27 +461,7 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
                 })
 
             # Feature 7: Write to deletion audit log
-            if results:
-                audit_entry = {
-                    "timestamp": int(time.time()),
-                    "date": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "files_count": len(file_paths),
-                    "reclaimed_bytes": reclaimed_bytes,
-                    "reclaimed_human": scanner.format_bytes(reclaimed_bytes),
-                    "use_recycle_bin": use_recycle_bin,
-                    "items": results
-                }
-                try:
-                    records = []
-                    if AUDIT_FILE.exists():
-                        with open(AUDIT_FILE, "r", encoding="utf-8") as f:
-                            records = json.load(f)
-                    records.insert(0, audit_entry)
-                    records = records[:500]
-                    with open(AUDIT_FILE, "w", encoding="utf-8") as f:
-                        json.dump(records, f, indent=2)
-                except Exception as e:
-                    print("Audit log write error:", e)
+            record_deletion_audit("Duplicate Cleanup", results, reclaimed_bytes, use_recycle_bin)
 
             # Feature 2: Trigger Plex auto-refresh if enabled
             if plex_api.plex_client.auto_refresh_on_delete:
@@ -457,6 +543,14 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
             items = body.get("items", [])
             use_bin = body.get("use_recycle_bin", True)
             res = cleaner.library_cleaner.clean_items(items, use_recycle_bin=use_bin)
+            if res.get("items") and res.get("success_count", 0) > 0:
+                record_deletion_audit(
+                    "Library Cleaner",
+                    res["items"],
+                    res.get("reclaimed_bytes", 0),
+                    use_bin,
+                    extra={"debris_count": res.get("success_count", 0)}
+                )
             self._send_json(200, res)
 
         # Feature 2: Plex Config & Refresh

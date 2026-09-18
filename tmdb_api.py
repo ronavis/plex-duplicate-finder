@@ -237,5 +237,89 @@ class TmdbClient:
             return self.get_poster_data(poster_path, size)
         return None
 
+    def search_backdrop(self, title: str, year: Optional[int] = None) -> Optional[str]:
+        """Search TMDb for title and return relative backdrop_path (e.g. '/abc.jpg')."""
+        if not self.is_configured():
+            return None
+
+        cache_key = f"backdrop_{title.lower().strip()}_{year or ''}"
+        if cache_key in self._poster_cache:
+            return self._poster_cache[cache_key]
+
+        candidate_queries = self._generate_search_queries(title)
+
+        for q in candidate_queries:
+            try:
+                params = {"query": q, "include_adult": "true"}
+                if year:
+                    params["year"] = str(year)
+
+                req = self._build_request("/search/multi", params)
+                with urllib.request.urlopen(req, timeout=3.5) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    results = data.get("results", [])
+
+                    matched_path = None
+                    if year:
+                        for it in results:
+                            b_path = it.get("backdrop_path")
+                            if not b_path:
+                                continue
+                            date_str = it.get("release_date") or it.get("first_air_date") or ""
+                            if date_str and len(date_str) >= 4:
+                                try:
+                                    it_yr = int(date_str[:4])
+                                    if abs(it_yr - int(year)) <= 1:
+                                        matched_path = b_path
+                                        break
+                                except Exception:
+                                    pass
+
+                    if not matched_path:
+                        for it in results:
+                            if it.get("backdrop_path"):
+                                matched_path = it.get("backdrop_path")
+                                break
+
+                    if matched_path:
+                        self._poster_cache[cache_key] = matched_path
+                        return matched_path
+            except Exception:
+                continue
+
+        return None
+
+    def get_backdrop_data(self, backdrop_path: str, size: str = "w1280") -> Optional[Tuple[bytes, str]]:
+        """Download and cache 16:9 hero backdrop image bytes from TMDb."""
+        if not backdrop_path:
+            return None
+
+        clean_path = backdrop_path.lstrip("/")
+        cache_key = f"backdrop_{size}_{clean_path}"
+        if cache_key in self._image_cache:
+            return self._image_cache[cache_key]
+
+        url = f"https://image.tmdb.org/t/p/{size}/{clean_path}"
+        headers = {"User-Agent": "PlexSpaceReclaimer/2.0"}
+        req = urllib.request.Request(url, headers=headers)
+
+        try:
+            with urllib.request.urlopen(req, timeout=5.0) as resp:
+                content_type = resp.headers.get("Content-Type", "image/jpeg")
+                data = resp.read()
+                if len(self._image_cache) > 200:
+                    self._image_cache.clear()
+                self._image_cache[cache_key] = (data, content_type)
+                return data, content_type
+        except Exception:
+            return None
+
+    def get_backdrop_by_title(self, title: str, year: Optional[int] = None, size: str = "w1280") -> Optional[Tuple[bytes, str]]:
+        """Search TMDb and fetch raw 16:9 hero backdrop in one step."""
+        backdrop_path = self.search_backdrop(title, year)
+        if backdrop_path:
+            return self.get_backdrop_data(backdrop_path, size)
+        return None
+
 
 tmdb_client = TmdbClient()

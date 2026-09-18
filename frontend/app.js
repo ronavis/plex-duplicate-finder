@@ -137,6 +137,8 @@ const modalAudit = document.getElementById('modal-audit');
 const btnModalAuditClose = document.getElementById('btn-modal-audit-close');
 const btnModalAuditCancel = document.getElementById('btn-modal-audit-cancel');
 const btnClearAudit = document.getElementById('btn-clear-audit');
+const btnExportAuditCsv = document.getElementById('btn-export-audit-csv');
+const auditTotalSummary = document.getElementById('audit-total-summary');
 const auditTableContainer = document.getElementById('audit-table-container');
 
 // Preview Modal
@@ -360,6 +362,7 @@ function setupEventListeners() {
   if (btnModalAuditClose) btnModalAuditClose.addEventListener('click', () => modalAudit.classList.add('hidden'));
   if (btnModalAuditCancel) btnModalAuditCancel.addEventListener('click', () => modalAudit.classList.add('hidden'));
   if (btnClearAudit) btnClearAudit.addEventListener('click', clearAuditHistory);
+  if (btnExportAuditCsv) btnExportAuditCsv.addEventListener('click', exportAuditToCsv);
 
   // Feature 5: Preview Modal Setup
   if (btnModalPreviewClose) {
@@ -780,29 +783,33 @@ function renderDuplicateGroups() {
 
     return `
       <div class="duplicate-group-card" data-group-idx="${groupIdx}">
-        <div class="group-header">
-          <div class="group-header-left">
-            <div class="group-poster-wrap">
-              <img class="group-poster-img" src="/api/plex/poster?title=${encodeURIComponent(group.title)}&year=${firstYear || ''}" alt="${escapeHtml(group.title)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" loading="lazy">
-              <div class="group-poster-fallback" style="display: none;">🎬</div>
+        <div class="group-hero-backdrop" style="background-image: url('/api/media/hero?title=${encodeURIComponent(group.title)}&year=${firstYear || ''}');"></div>
+        <div class="group-hero-overlay"></div>
+        <div class="group-card-content">
+          <div class="group-header">
+            <div class="group-header-left">
+              <div class="group-poster-wrap">
+                <img class="group-poster-img" src="/api/plex/poster?title=${encodeURIComponent(group.title)}&year=${firstYear || ''}" alt="${escapeHtml(group.title)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" loading="lazy">
+                <div class="group-poster-fallback" style="display: none;">🎬</div>
+              </div>
+              <div class="group-header-title-box">
+                <div class="group-title">${escapeHtml(group.title)}</div>
+                <div class="group-sub-info">${escapeHtml(groupSubInfo)}</div>
+              </div>
             </div>
-            <div class="group-header-title-box">
-              <div class="group-title">${escapeHtml(group.title)}</div>
-              <div class="group-sub-info">${escapeHtml(groupSubInfo)}</div>
+            <div class="group-meta">
+              <span class="badge ${group.type === 'exact_match' ? 'badge-res-4k' : 'badge-accent'}">
+                ${escapeHtml(group.match_reason)}
+              </span>
+              <span class="group-reclaimable">Reclaimable: ${group.reclaimable_human}</span>
+              <button type="button" class="${toggleBtnClass}" data-group-idx="${groupIdx}" title="${hasSelectedInGroup ? 'Click to uncheck all files in this group' : 'Click to check duplicate versions in this group'}">
+                ${toggleBtnText}
+              </button>
             </div>
           </div>
-          <div class="group-meta">
-            <span class="badge ${group.type === 'exact_match' ? 'badge-res-4k' : 'badge-accent'}">
-              ${escapeHtml(group.match_reason)}
-            </span>
-            <span class="group-reclaimable">Reclaimable: ${group.reclaimable_human}</span>
-            <button type="button" class="${toggleBtnClass}" data-group-idx="${groupIdx}" title="${hasSelectedInGroup ? 'Click to uncheck all files in this group' : 'Click to check duplicate versions in this group'}">
-              ${toggleBtnText}
-            </button>
+          <div class="group-files-list">
+            ${fileRows}
           </div>
-        </div>
-        <div class="group-files-list">
-          ${fileRows}
         </div>
       </div>
     `;
@@ -1837,58 +1844,159 @@ async function executeCleanerDelete() {
 // ==========================================
 // FEATURE 7: Deletion Audit Trail
 // ==========================================
+let currentAuditRecords = [];
+
 async function openAuditModal() {
   modalAudit.classList.remove('hidden');
   auditTableContainer.innerHTML = '<div class="loading-placeholder">Loading deletion history...</div>';
+  if (auditTotalSummary) auditTotalSummary.textContent = 'Fetching deletion history...';
 
   try {
     const res = await fetch('/api/audit/history');
     const data = await res.json();
     const records = data.records || [];
+    currentAuditRecords = records;
+
+    const totalReclaimed = data.total_reclaimed_human || formatBytes(records.reduce((acc, r) => acc + (r.reclaimed_bytes || 0), 0));
+    const totalFiles = data.total_files || records.reduce((acc, r) => acc + (r.files_count || (r.items ? r.items.length : 0)), 0);
+
+    if (auditTotalSummary) {
+      if (records.length > 0) {
+        auditTotalSummary.innerHTML = `
+          <span class="audit-stat-pill">✨ ${escapeHtml(totalReclaimed)} Reclaimed</span>
+          <span style="margin-left: 8px;"><strong>${totalFiles}</strong> file(s) across <strong>${records.length}</strong> operation(s)</span>
+        `;
+      } else {
+        auditTotalSummary.textContent = 'No recorded deletion events yet';
+      }
+    }
 
     if (!records.length) {
-      auditTableContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 40px;">No files have been deleted yet. Deletion history will appear here.</div>';
+      auditTableContainer.innerHTML = `
+        <div style="text-align: center; color: var(--text-muted); padding: 50px 20px;">
+          <div style="font-size: 2rem; margin-bottom: 8px;">📜</div>
+          <div style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">Audit Log is Empty</div>
+          <div style="font-size: 0.82rem; max-width: 440px; margin: 0 auto; line-height: 1.5;">
+            Whenever duplicate files are removed or media debris is cleaned via the Library Cleaner, verified audit entries with file paths, sizes, and timestamps will appear here.
+          </div>
+        </div>
+      `;
       return;
     }
 
-    const rows = records.map(r => `
-      <tr>
-        <td><strong>${escapeHtml(r.date)}</strong></td>
-        <td>${r.files_count} file(s)</td>
-        <td style="color: var(--emerald); font-weight: 700;">${r.reclaimed_human}</td>
-        <td>${r.use_recycle_bin ? '♻️ Recycle Bin' : 'Permanently Removed'}</td>
-        <td style="font-size: 0.72rem; font-family: monospace;" title="${escapeHtml((r.items || []).map(i => i.path).join('\n'))}">
-          ${escapeHtml((r.items || []).map(i => i.filename || i.path).slice(0, 2).join(', '))} ${(r.items || []).length > 2 ? '... (+' + ((r.items || []).length - 2) + ' more)' : ''}
-        </td>
-      </tr>
-    `).join('');
+    const rows = records.map((r, idx) => {
+      const action = r.action || 'Duplicate Cleanup';
+      let badgeClass = 'audit-badge-dup';
+      if (action.toLowerCase().includes('cleaner') || action.toLowerCase().includes('debris')) {
+        badgeClass = 'audit-badge-cleaner';
+      } else if (action.toLowerCase().includes('migrat') || action.toLowerCase().includes('pool')) {
+        badgeClass = 'audit-badge-migrator';
+      }
+
+      const items = r.items || [];
+      const filesCount = r.files_count || items.length;
+      const reclaimedStr = r.reclaimed_human || formatBytes(r.reclaimed_bytes || 0);
+      const safetyStr = r.use_recycle_bin ? '♻️ Recycle Bin' : 'Permanently Removed';
+
+      const sampleNames = items.map(i => i.filename || (i.path ? i.path.split('\\').pop() : 'Unknown')).slice(0, 2).join(', ');
+      const moreCount = items.length > 2 ? ` (+${items.length - 2} more)` : '';
+
+      const detailItemsHtml = items.map(i => `
+        <div class="audit-expanded-file-item">
+          <span title="${escapeHtml(i.path || '')}">${escapeHtml(i.filename || i.path || '')}</span>
+          <span style="color: var(--plex-gold); font-weight: 600; white-space: nowrap;">${escapeHtml(i.size_human || formatBytes(i.size_bytes || 0))}</span>
+        </div>
+      `).join('');
+
+      return `
+        <tr>
+          <td><strong style="color: var(--text-primary);">${escapeHtml(r.date || '')}</strong></td>
+          <td><span class="audit-badge ${badgeClass}">${escapeHtml(action)}</span></td>
+          <td><strong>${filesCount}</strong> item(s)</td>
+          <td style="color: var(--emerald); font-weight: 700;">${escapeHtml(reclaimedStr)}</td>
+          <td><span style="font-size: 0.78rem;">${safetyStr}</span></td>
+          <td>
+            <div style="display: flex; align-items: center; flex-wrap: wrap;">
+              <span style="font-size: 0.74rem; font-family: monospace;" title="${escapeHtml(items.map(i => i.path).join('\n'))}">
+                ${escapeHtml(sampleNames)}${moreCount}
+              </span>
+              ${items.length > 0 ? `<button type="button" class="audit-details-toggle" onclick="toggleAuditRowDetails(${idx})">Details ▼</button>` : ''}
+            </div>
+            <div id="audit-expanded-${idx}" class="audit-expanded-files hidden">
+              ${detailItemsHtml}
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
 
     auditTableContainer.innerHTML = `
       <table class="audit-table">
         <thead>
           <tr>
             <th>Date / Time</th>
-            <th>Files</th>
+            <th>Operation Type</th>
+            <th>Items</th>
             <th>Space Reclaimed</th>
             <th>Safety Method</th>
-            <th>Sample Files</th>
+            <th>Processed Files</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
     `;
   } catch (err) {
-    auditTableContainer.innerHTML = `<div class="error-msg">Failed to load audit records: ${err.message}</div>`;
+    auditTableContainer.innerHTML = `<div class="error-msg">Failed to load audit records: ${escapeHtml(err.message)}</div>`;
   }
 }
 
+window.toggleAuditRowDetails = function(idx) {
+  const el = document.getElementById(`audit-expanded-${idx}`);
+  if (el) {
+    el.classList.toggle('hidden');
+  }
+};
+
+function exportAuditToCsv() {
+  if (!currentAuditRecords || !currentAuditRecords.length) {
+    showToast('No audit records to export.');
+    return;
+  }
+
+  let csvContent = "Date,Action,Files Count,Space Reclaimed,Safety Method,File Paths\n";
+  currentAuditRecords.forEach(r => {
+    const date = `"${(r.date || '').replace(/"/g, '""')}"`;
+    const action = `"${(r.action || 'Duplicate Cleanup').replace(/"/g, '""')}"`;
+    const count = r.files_count || (r.items ? r.items.length : 0);
+    const reclaimed = `"${(r.reclaimed_human || '').replace(/"/g, '""')}"`;
+    const method = r.use_recycle_bin ? "Recycle Bin" : "Permanent / Direct Reclaim";
+    const paths = `"${(r.items || []).map(i => i.path).join('; ').replace(/"/g, '""')}"`;
+    csvContent += `${date},${action},${count},${reclaimed},"${method}",${paths}\n`;
+  });
+
+  const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `plex_deletion_audit_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Audit log exported to CSV spreadsheet.');
+}
+
 async function clearAuditHistory() {
-  if (!confirm('Are you sure you want to clear the deletion audit log?')) return;
+  if (!confirm('Are you sure you want to clear the deletion audit log? This cannot be undone.')) return;
   try {
-    await fetch('/api/audit/clear', { method: 'POST' });
+    const res = await fetch('/api/audit/clear', { method: 'POST' });
+    const data = await res.json();
+    currentAuditRecords = [];
     openAuditModal();
-    showToast('Audit history cleared.');
-  } catch (e) {}
+    showToast(data.message || 'Audit history cleared.');
+  } catch (e) {
+    alert('Failed to clear audit history: ' + e.message);
+  }
 }
 
 // Toast Notifications

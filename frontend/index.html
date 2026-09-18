@@ -533,8 +533,11 @@
         </div>
         <div class="modal-body">
           <div class="audit-toolbar">
-            <span id="audit-total-summary">Showing past duplicate deletion events</span>
-            <button id="btn-clear-audit" class="btn btn-ghost btn-sm">Clear History</button>
+            <span id="audit-total-summary">Showing past deletion events</span>
+            <div class="audit-toolbar-right">
+              <button id="btn-export-audit-csv" class="btn btn-secondary btn-sm" title="Export audit trail as CSV spreadsheet">📥 Export CSV</button>
+              <button id="btn-clear-audit" class="btn btn-ghost btn-sm">Clear History</button>
+            </div>
           </div>
           <div id="audit-table-container" class="audit-table-wrapper">
             <div class="loading-placeholder">Loading deletion history...</div>

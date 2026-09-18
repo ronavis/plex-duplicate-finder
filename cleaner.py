@@ -141,6 +141,7 @@ class LibraryCleaner:
         reclaimed_bytes = 0
         success_count = 0
         failures = []
+        processed_items = []
 
         for path_str in item_paths:
             p = Path(path_str)
@@ -162,12 +163,23 @@ class LibraryCleaner:
             else:
                 failures.append({"path": path_str, "error": msg})
 
+            processed_items.append({
+                "path": path_str,
+                "filename": Path(path_str).name,
+                "success": success,
+                "message": msg,
+                "size_bytes": sz,
+                "size_human": scanner.format_bytes(sz),
+                "is_dir": is_dir,
+            })
+
         return {
             "status": "completed",
             "success_count": success_count,
             "failed_count": len(failures),
             "reclaimed_bytes": reclaimed_bytes,
             "reclaimed_human": scanner.format_bytes(reclaimed_bytes),
+            "items": processed_items,
             "failures": failures
         }
 

@@ -223,6 +223,33 @@ class TestApiEndpoints(unittest.TestCase):
             self.assertIn("connected", data)
             self.assertFalse(data["connected"])
 
+    def test_cleaner_clean_items_tracking(self):
+        f = tempfile.NamedTemporaryFile(delete=False)
+        f.write(b"debris content")
+        f.close()
+        res = cleaner.library_cleaner.clean_items([f.name], use_recycle_bin=False)
+        self.assertEqual(res["status"], "completed")
+        self.assertEqual(res["success_count"], 1)
+        self.assertIn("items", res)
+        self.assertEqual(len(res["items"]), 1)
+        self.assertEqual(res["items"][0]["path"], f.name)
+
+    def test_record_deletion_audit(self):
+        import server
+        dummy_items = [{"path": "C:\\test.mkv", "filename": "test.mkv", "size_bytes": 1000, "size_human": "1.00 KB", "success": True}]
+        server.record_deletion_audit("Test Action", dummy_items, 1000, use_recycle_bin=True)
+        self.assertTrue(server.AUDIT_FILE.exists())
+
+    def test_hero_endpoint_not_found(self):
+        import urllib.request
+        import urllib.error
+        try:
+            req = urllib.request.Request("http://127.0.0.1:8282/api/media/hero?title=NonExistentHeroMedia12345")
+            with urllib.request.urlopen(req, timeout=4.0) as resp:
+                self.assertEqual(resp.status, 404)
+        except urllib.error.HTTPError as e:
+            self.assertEqual(e.code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()

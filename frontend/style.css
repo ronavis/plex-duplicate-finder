@@ -878,16 +878,58 @@ body {
 }
 
 .duplicate-group-card {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: 16px;
-  margin-bottom: 16px;
-  transition: border-color var(--transition-fast);
+  position: relative;
+  background: rgba(14, 18, 28, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  padding: 0;
+  margin-bottom: 20px;
+  overflow: hidden;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), 
+              border-color 0.3s ease, 
+              box-shadow 0.3s ease;
 }
 
 .duplicate-group-card:hover {
-  border-color: rgba(255, 255, 255, 0.16);
+  border-color: rgba(229, 160, 13, 0.35);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55), 0 0 20px rgba(229, 160, 13, 0.08);
+}
+
+.group-hero-backdrop {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 25%;
+  background-repeat: no-repeat;
+  opacity: 0.18;
+  filter: saturate(1.25) contrast(1.1);
+  transform: scale(1.0);
+  transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.duplicate-group-card:hover .group-hero-backdrop {
+  transform: scale(1.04);
+  opacity: 0.28;
+}
+
+.group-hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(8, 11, 18, 0.92) 0%, rgba(12, 16, 26, 0.82) 55%, rgba(8, 11, 18, 0.94) 100%),
+              radial-gradient(ellipse at top right, rgba(229, 160, 13, 0.08) 0%, transparent 65%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.group-card-content {
+  position: relative;
+  z-index: 2;
+  padding: 18px 20px;
 }
 
 .group-header {
@@ -1489,13 +1531,67 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
   font-size: 0.85rem;
   color: var(--text-secondary);
 }
 
+.audit-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.audit-stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  background: rgba(229, 160, 13, 0.12);
+  border: 1px solid rgba(229, 160, 13, 0.3);
+  border-radius: 999px;
+  color: var(--plex-gold);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.audit-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.audit-badge-dup {
+  background: rgba(229, 160, 13, 0.15);
+  color: var(--plex-gold);
+  border: 1px solid rgba(229, 160, 13, 0.3);
+}
+
+.audit-badge-cleaner {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--emerald);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.audit-badge-migrator {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
 .audit-table-wrapper {
-  max-height: 380px;
+  max-height: 420px;
   overflow-y: auto;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
@@ -1505,23 +1601,71 @@ body {
 .audit-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
 }
 
 .audit-table th {
-  background: rgba(255, 255, 255, 0.04);
-  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 11px 14px;
   text-align: left;
   color: var(--text-muted);
   font-weight: 600;
   position: sticky;
   top: 0;
+  z-index: 2;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .audit-table td {
-  padding: 10px 12px;
+  padding: 11px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
   color: var(--text-secondary);
+  vertical-align: top;
+}
+
+.audit-table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.audit-details-toggle {
+  background: none;
+  border: none;
+  color: var(--plex-gold);
+  cursor: pointer;
+  font-size: 0.74rem;
+  text-decoration: underline;
+  padding: 2px 4px;
+  margin-left: 6px;
+  display: inline-block;
+}
+
+.audit-details-toggle:hover {
+  color: #fff;
+}
+
+.audit-expanded-files {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+  font-family: monospace;
+  font-size: 0.73rem;
+  max-height: 180px;
+  overflow-y: auto;
+  line-height: 1.6;
+}
+
+.audit-expanded-file-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.audit-expanded-file-item:last-child {
+  border-bottom: none;
 }
 
 /* Media Preview Player */

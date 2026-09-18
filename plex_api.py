@@ -340,6 +340,69 @@ class PlexClient:
 
         return None
 
+    def search_hero_art(self, title: str, year: Optional[int] = None) -> Optional[str]:
+        """Search Plex library for movie/show title and return backdrop/fanart (art or grandparentArt) path."""
+        if not self.server_url:
+            return None
+
+        cache_key = f"hero_{title.lower().strip()}_{year or ''}"
+        if cache_key in self._poster_cache:
+            return self._poster_cache[cache_key]
+
+        clean_q = re.sub(r"[\._\-\+]", " ", title)
+        clean_q = re.sub(r"\b(1080p|720p|2160p|4k|bluray|web-dl|x264|x265|hevc|remux)\b", "", clean_q, flags=re.IGNORECASE)
+        clean_q = re.sub(r"\s+", " ", clean_q).strip()
+        if not clean_q:
+            clean_q = title.strip()
+
+        encoded_q = urllib.parse.quote(clean_q)
+        try:
+            req = self._build_request(f"/search?query={encoded_q}")
+            with urllib.request.urlopen(req, timeout=3.0) as resp:
+                raw = resp.read()
+                try:
+                    data = json.loads(raw.decode("utf-8"))
+                    mc = data.get("MediaContainer", {})
+                    items = mc.get("Metadata", [])
+                    if not items and "SearchResult" in mc:
+                        items = mc.get("SearchResult", [])
+                except Exception:
+                    root = ET.fromstring(raw)
+                    items = []
+                    for el in root.findall(".//Video"):
+                        items.append(el.attrib)
+                    for el in root.findall(".//Directory"):
+                        items.append(el.attrib)
+
+                matched_art = None
+                for it in items:
+                    art = it.get("art") or it.get("grandparentArt")
+                    if not art:
+                        continue
+                    it_year = it.get("year")
+                    if year and it_year:
+                        try:
+                            if abs(int(it_year) - int(year)) <= 1:
+                                matched_art = art
+                                break
+                        except Exception:
+                            pass
+
+                if not matched_art:
+                    for it in items:
+                        art = it.get("art") or it.get("grandparentArt")
+                        if art:
+                            matched_art = art
+                            break
+
+                if matched_art:
+                    self._poster_cache[cache_key] = matched_art
+                    return matched_art
+        except Exception:
+            pass
+
+        return None
+
     def get_thumbnail_data(self, thumb_path: str) -> Optional[Tuple[bytes, str]]:
         """Fetch raw thumbnail image bytes and content-type from Plex server."""
         if not self.server_url or not thumb_path:
