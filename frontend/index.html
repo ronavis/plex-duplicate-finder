@@ -26,19 +26,36 @@
           <p class="brand-subtitle">Smart multi-drive deduplication for movies & TV series</p>
         </div>
       </div>
-      <div class="header-actions">
-        <div id="stat-pool" class="stat-pill">
-          <span class="stat-label">Plex Storage Pool</span>
-          <span id="header-pool-val" class="stat-val">0.0% Full</span>
-          <span id="header-pool-sub" class="stat-sub">0.00 TB Free</span>
+
+      <div class="header-right-group">
+        <!-- Top Tool Actions -->
+        <div class="header-nav-actions">
+          <button id="btn-open-plex-modal" class="btn btn-secondary btn-sm" title="Configure connection to your Plex Media Server">
+            <span id="plex-status-dot" class="status-dot dot-gray"></span>
+            <span>⚙️ Plex Connect</span>
+          </button>
+          <button id="btn-open-cleaner-modal" class="btn btn-secondary btn-sm" title="Scan and remove empty folders, sample clips, and orphan junk">
+            <span>🧹 Library Cleaner</span>
+          </button>
+          <button id="btn-open-audit-modal" class="btn btn-secondary btn-sm" title="View historical log of deleted duplicate files">
+            <span>📜 Deletion History</span>
+          </button>
         </div>
-        <div id="stat-reclaimable" class="stat-pill">
-          <span class="stat-label">Reclaimable Space</span>
-          <span id="total-reclaimable-val" class="stat-val">0.00 GB</span>
-        </div>
-        <div id="stat-groups" class="stat-pill">
-          <span class="stat-label">Duplicate Groups</span>
-          <span id="total-groups-val" class="stat-val">0</span>
+
+        <div class="header-actions">
+          <div id="stat-pool" class="stat-pill">
+            <span class="stat-label">Plex Storage Pool</span>
+            <span id="header-pool-val" class="stat-val">0.0% Full</span>
+            <span id="header-pool-sub" class="stat-sub">0.00 TB Free</span>
+          </div>
+          <div id="stat-reclaimable" class="stat-pill">
+            <span class="stat-label">Reclaimable Space</span>
+            <span id="total-reclaimable-val" class="stat-val">0.00 GB</span>
+          </div>
+          <div id="stat-groups" class="stat-pill">
+            <span class="stat-label">Duplicate Groups</span>
+            <span id="total-groups-val" class="stat-val">0</span>
+          </div>
         </div>
       </div>
     </header>
@@ -170,6 +187,10 @@
           </div>
 
           <div class="results-actions">
+            <!-- Feature 7: Export CSV -->
+            <button id="btn-export-csv" class="btn btn-secondary btn-sm" title="Download all detected duplicate groups as a CSV spreadsheet">
+              📊 Export CSV
+            </button>
             <button id="btn-smart-select" class="btn btn-secondary btn-sm" title="Automatically selects lower quality duplicates while keeping the highest quality version">
               ⭐ Auto-Select Lower Quality
             </button>
@@ -180,7 +201,39 @@
           </div>
         </div>
 
-        <!-- Filter Bar -->
+        <!-- Feature 1: Multi-Filter & Instant Search Toolbar -->
+        <div class="search-filter-toolbar">
+          <div class="search-input-wrapper">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input type="text" id="input-search-title" placeholder="Search title or folder (e.g. Gladiator, Avatar, S01E02)..." class="search-input">
+            <button id="btn-clear-search" class="search-clear-btn hidden">&times;</button>
+          </div>
+
+          <div class="filter-dropdown-group">
+            <div class="select-wrapper">
+              <label for="select-filter-drive" class="filter-dropdown-label">Drive:</label>
+              <select id="select-filter-drive" class="filter-select">
+                <option value="all">All Drives</option>
+              </select>
+            </div>
+
+            <div class="select-wrapper">
+              <label for="select-filter-min-size" class="filter-dropdown-label">Min Reclaimable:</label>
+              <select id="select-filter-min-size" class="filter-select">
+                <option value="0">Any Size</option>
+                <option value="1">Reclaimable > 1 GB</option>
+                <option value="5">Reclaimable > 5 GB</option>
+                <option value="10">Reclaimable > 10 GB</option>
+                <option value="25">Reclaimable > 25 GB</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filter Tabs -->
         <div class="filter-tabs">
           <button class="filter-tab active" data-filter="all">All (<span id="filter-count-all">0</span>)</button>
           <button class="filter-tab" data-filter="exact_match">Exact Matches (<span id="filter-count-exact">0</span>)</button>
@@ -250,6 +303,199 @@
         <div class="modal-footer">
           <button id="btn-modal-cancel" class="btn btn-secondary">Cancel</button>
           <button id="btn-modal-confirm" class="btn btn-danger" disabled>Confirm Removal</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature 2: Plex Connect Modal -->
+    <div id="modal-plex" class="modal-backdrop hidden">
+      <div class="modal-card modal-md">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span style="color: var(--plex-gold); font-size: 1.3rem;">⚙️</span>
+            <h3>Plex Media Server Integration</h3>
+          </div>
+          <button id="btn-modal-plex-close" class="modal-close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description">Connect directly to your local or network Plex Media Server to cross-reference editions, watch history, and trigger library updates automatically.</p>
+          
+          <div class="form-group">
+            <label for="input-plex-url">Plex Server URL</label>
+            <input type="text" id="input-plex-url" class="input-control" placeholder="http://127.0.0.1:32400" value="http://127.0.0.1:32400">
+            <span class="field-hint">e.g. <code>http://127.0.0.1:32400</code> or your LAN IP <code>http://192.168.1.X:32400</code></span>
+          </div>
+
+          <div class="form-group">
+            <label for="input-plex-token">Plex Token (X-Plex-Token)</label>
+            <input type="password" id="input-plex-token" class="input-control" placeholder="Optional if local network authentication is disabled">
+            <span class="field-hint">Optional for unauthenticated local servers, or enter your 20-character token.</span>
+          </div>
+
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="check-plex-autorefresh" checked>
+              <span>Automatically trigger Plex library scan after deleting duplicates</span>
+            </label>
+          </div>
+
+          <div id="plex-test-result" class="diagnostic-box hidden"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="btn-test-plex" class="btn btn-secondary">Test Connection</button>
+          <button id="btn-save-plex" class="btn btn-primary">Save Configuration</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature 6: Library Cleaner Modal -->
+    <div id="modal-cleaner" class="modal-backdrop hidden">
+      <div class="modal-card modal-lg">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span style="color: var(--plex-gold); font-size: 1.3rem;">🧹</span>
+            <h3>Media Library Cleaner</h3>
+          </div>
+          <button id="btn-modal-cleaner-close" class="modal-close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description">Detect and remove leftover junk files, empty series directories, sample clips, and orphan subtitle files across your selected Plex drives.</p>
+
+          <div class="cleaner-controls-row">
+            <div class="cleaner-drive-select">
+              <label for="select-cleaner-drive">Target Drive:</label>
+              <select id="select-cleaner-drive" class="filter-select"></select>
+            </div>
+            <button id="btn-start-cleaner-scan" class="btn btn-primary btn-sm">Scan Drive for Debris</button>
+          </div>
+
+          <div id="cleaner-results-container" class="cleaner-results hidden">
+            <div class="cleaner-summary-bar">
+              <span id="cleaner-found-count">0 items found</span>
+              <span class="cleaner-reclaim-highlight" id="cleaner-reclaim-val">Reclaimable: 0.00 MB</span>
+            </div>
+
+            <div class="cleaner-tabs">
+              <button class="cleaner-tab active" data-tab="empty_folders">Empty Folders (<span id="cnt-empty-folders">0</span>)</button>
+              <button class="cleaner-tab" data-tab="sample_files">Sample Clips (<span id="cnt-sample-files">0</span>)</button>
+              <button class="cleaner-tab" data-tab="junk_files">Junk Files (<span id="cnt-junk-files">0</span>)</button>
+              <button class="cleaner-tab" data-tab="orphan_subtitles">Orphan Subs (<span id="cnt-orphan-subs">0</span>)</button>
+            </div>
+
+            <div id="cleaner-items-list" class="cleaner-items-scroll"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btn-cleaner-cancel" class="btn btn-secondary">Close</button>
+          <button id="btn-cleaner-execute" class="btn btn-danger" disabled>Clean Selected to Recycle Bin</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature 4: Storage Balancer Modal -->
+    <div id="modal-balancer" class="modal-backdrop hidden">
+      <div class="modal-card modal-md">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span style="color: var(--plex-gold); font-size: 1.3rem;">⇄</span>
+            <h3>Storage Balancer: Migrate File</h3>
+          </div>
+          <button id="btn-modal-balancer-close" class="modal-close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="balancer-file-info">
+            <div class="balancer-filename" id="balancer-target-filename">Movie.mkv</div>
+            <div class="balancer-filesize" id="balancer-target-size">0.00 GB</div>
+            <div class="balancer-sourcepath" id="balancer-source-path">C:\...</div>
+          </div>
+
+          <div class="form-group" style="margin-top: 16px;">
+            <label for="select-balancer-target-drive">Select Destination Drive (Preserves Directory Structure):</label>
+            <select id="select-balancer-target-drive" class="filter-select"></select>
+          </div>
+
+          <div id="balancer-progress-box" class="balancer-progress-box hidden">
+            <div class="balancer-progress-line">
+              <span id="balancer-status-text">Moving file...</span>
+              <span id="balancer-pct-text">0.0%</span>
+            </div>
+            <div class="pool-meter-container">
+              <div id="balancer-bar-fill" class="pool-meter-fill warning" style="width: 0%;"></div>
+            </div>
+            <div class="balancer-stats-line">
+              <span id="balancer-speed-text">0.0 MB/s</span>
+              <span id="balancer-eta-text">ETA: Calculating...</span>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btn-balancer-cancel" class="btn btn-secondary">Cancel</button>
+          <button id="btn-balancer-start" class="btn btn-primary">Start Migration</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature 7: Deletion Audit Trail Modal -->
+    <div id="modal-audit" class="modal-backdrop hidden">
+      <div class="modal-card modal-lg">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span style="color: var(--plex-gold); font-size: 1.3rem;">📜</span>
+            <h3>Deletion Audit History</h3>
+          </div>
+          <button id="btn-modal-audit-close" class="modal-close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="audit-toolbar">
+            <span id="audit-total-summary">Showing past duplicate deletion events</span>
+            <button id="btn-clear-audit" class="btn btn-ghost btn-sm">Clear History</button>
+          </div>
+          <div id="audit-table-container" class="audit-table-wrapper">
+            <div class="loading-placeholder">Loading deletion history...</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btn-modal-audit-cancel" class="btn btn-secondary">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature 5: Media Video Preview Modal -->
+    <div id="modal-preview" class="modal-backdrop hidden">
+      <div class="modal-card modal-lg">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span style="color: var(--plex-gold); font-size: 1.3rem;">🎬</span>
+            <h3 id="preview-modal-title">Video Preview</h3>
+          </div>
+          <button id="btn-modal-preview-close" class="modal-close-btn">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 0;">
+          <div class="preview-player-wrapper">
+            <video id="preview-video-player" controls preload="metadata" playsinline></video>
+          </div>
+          <div class="preview-meta-bar" id="preview-meta-details">Loading media stream...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature 3: Deep Stream Inspector Modal -->
+    <div id="modal-inspect" class="modal-backdrop hidden">
+      <div class="modal-card modal-md">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span style="color: var(--plex-gold); font-size: 1.3rem;">🔍</span>
+            <h3>Deep Stream Technical Analysis</h3>
+          </div>
+          <button id="btn-modal-inspect-close" class="modal-close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div id="inspect-content-box" class="inspect-details-box">
+            <div class="loading-placeholder">Inspecting Matroska / MP4 headers...</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btn-modal-inspect-close-footer" class="btn btn-secondary">Close</button>
         </div>
       </div>
     </div>
