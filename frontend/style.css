@@ -501,40 +501,47 @@ body {
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
+  justify-content: center;
+  padding: 4px 8px;
   border-radius: 4px;
   font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
 }
 
 .badge-accent {
   background: rgba(229, 160, 13, 0.15);
   color: var(--plex-gold);
-  border: 1px solid rgba(229, 160, 13, 0.3);
+  border: 1px solid rgba(229, 160, 13, 0.35);
 }
 
 .badge-res-4k {
   background: var(--cyan-bg);
   color: var(--cyan);
-  border: 1px solid rgba(6, 182, 212, 0.3);
+  border: 1px solid rgba(6, 182, 212, 0.35);
 }
 
 .badge-res-1080p {
   background: rgba(59, 130, 246, 0.15);
   color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  border: 1px solid rgba(59, 130, 246, 0.35);
 }
 
 .badge-res-sd {
   background: rgba(148, 163, 184, 0.15);
   color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
 }
 
 .badge-keep {
   background: var(--emerald-bg);
   color: var(--emerald);
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  font-weight: 700;
 }
 
 .filter-tabs {
@@ -617,19 +624,20 @@ body {
 
 .file-row {
   display: grid;
-  grid-template-columns: 28px 80px 1fr 140px 110px 100px;
+  grid-template-columns: 26px 72px minmax(180px, 1fr) auto 95px 85px;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: 16px;
+  padding: 10px 16px;
   background: rgba(0, 0, 0, 0.25);
   border-radius: var(--radius-sm);
   border: 1px solid rgba(255, 255, 255, 0.04);
   font-size: 0.82rem;
-  transition: background var(--transition-fast);
+  transition: background var(--transition-fast), border-color var(--transition-fast);
 }
 
 .file-row:hover {
   background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .file-row.marked-delete {
@@ -640,9 +648,11 @@ body {
 .file-drive {
   font-weight: 700;
   color: var(--plex-gold);
+  white-space: nowrap;
 }
 
 .file-path-col {
+  min-width: 0; /* Ensures text-overflow ellipsis functions properly in grid */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -651,21 +661,41 @@ body {
 .file-name {
   color: var(--text-primary);
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .file-parent {
   color: var(--text-muted);
   font-size: 0.74rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .file-badges {
   display: flex;
+  align-items: center;
   gap: 6px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.file-date {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  text-align: right;
+  flex-shrink: 0;
 }
 
 .file-size {
   text-align: right;
   font-weight: 600;
+  white-space: nowrap;
+  color: var(--text-primary);
+  flex-shrink: 0;
 }
 
 /* Empty State */
