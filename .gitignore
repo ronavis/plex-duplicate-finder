@@ -15,6 +15,8 @@ env/
 *.sqlite3
 scan_cache.json
 scan_history.json
+plex_config.json
+deletion_audit.json
 _quarantine/
 
 # Windows system files
