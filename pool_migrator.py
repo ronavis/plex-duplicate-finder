@@ -65,6 +65,7 @@ class PoolMigrator:
         self.progress_pct = 0.0
         self.eta_seconds = 0
         self.status_message = "Idle"
+        self.turbo_mode = True
         self.errors: List[str] = []
         self._lock = threading.Lock()
         self._thread: Optional[threading.Thread] = None
@@ -228,8 +229,8 @@ class PoolMigrator:
             "recommended_drive": recommended,
         }
 
-    def start_batch_migration(self, source_drive: str, target_drive: str, item_paths: List[str], use_recycle_bin: bool = True) -> Dict[str, Any]:
-        """Start background worker to migrate selected movies/shows."""
+    def start_batch_migration(self, source_drive: str, target_drive: str, item_paths: List[str], use_recycle_bin: bool = False, turbo_mode: bool = True) -> Dict[str, Any]:
+        """Start background worker to migrate selected movies/shows with Turbo mode & resume support."""
         with self._lock:
             if self.is_migrating:
                 return {"status": "error", "message": "A drive migration task is already running."}
@@ -268,16 +269,26 @@ class PoolMigrator:
             if not migration_queue:
                 return {"status": "error", "message": "No valid files found to migrate."}
 
+            # Calculate actual new bytes needed (accounting for files already transferred)
+            needed_new_bytes = 0
+            for file_p, sz, _ in migration_queue:
+                parts = file_p.parts
+                rel = Path(*parts[1:]) if len(parts) > 1 else Path(file_p.name)
+                d_file = target_root / rel
+                if not (d_file.exists() and d_file.stat().st_size == sz):
+                    needed_new_bytes += sz
+
             # Check target drive space
             target_free = shutil.disk_usage(target_root).free
-            if target_free < (total_bytes + BUFFER_HEADROOM_BYTES):
+            if target_free < (needed_new_bytes + BUFFER_HEADROOM_BYTES):
                 return {
                     "status": "error",
-                    "message": f"Target drive {dst_letter}: requires {scanner.format_bytes(total_bytes + BUFFER_HEADROOM_BYTES)} free, but only has {scanner.format_bytes(target_free)}."
+                    "message": f"Target drive {dst_letter}: requires {scanner.format_bytes(needed_new_bytes + BUFFER_HEADROOM_BYTES)} free, but only has {scanner.format_bytes(target_free)}."
                 }
 
             self.is_migrating = True
             self.cancel_requested = False
+            self.turbo_mode = turbo_mode
             self.source_drive = src_letter
             self.target_drive = dst_letter
             self.total_items = len(item_paths)
@@ -289,11 +300,12 @@ class PoolMigrator:
             self.speed_mbps = 0.0
             self.progress_pct = 0.0
             self.eta_seconds = 0
-            self.status_message = f"Starting migration from {src_letter}: to {dst_letter}:..."
+            mode_desc = "Turbo (64MB buffer, direct reclaim)" if turbo_mode else "Safe (Recycle Bin)"
+            self.status_message = f"Starting {mode_desc} migration from {src_letter}: to {dst_letter}:..."
             self.errors = []
 
         def worker():
-            chunk_size = 4 * 1024 * 1024  # 4 MB
+            chunk_size = (64 * 1024 * 1024) if turbo_mode else (4 * 1024 * 1024)
             start_time = time.time()
             last_calc_time = start_time
             bytes_since_calc = 0
@@ -319,8 +331,27 @@ class PoolMigrator:
                         rel_path = Path(src_file.name)
 
                     dest_file = target_root / rel_path
-                    dest_temp = dest_file.with_suffix(dest_file.suffix + ".part")
 
+                    # Intelligent Resume & Skip:
+                    # If destination file already exists and byte sizes match exactly
+                    if dest_file.exists() and dest_file.stat().st_size == file_size:
+                        if src_file.exists():
+                            try:
+                                if turbo_mode or not use_recycle_bin:
+                                    os.remove(src_file)
+                                else:
+                                    scanner.safe_delete_file(str(src_file), use_recycle_bin=use_recycle_bin)
+                            except Exception:
+                                pass
+
+                        with self._lock:
+                            self.transferred_batch_bytes += file_size
+                            self.current_file_transferred = file_size
+                            self.progress_pct = (self.transferred_batch_bytes / self.total_batch_bytes) * 100 if self.total_batch_bytes > 0 else 100.0
+                            self.status_message = f"Resuming {self.current_item_name}: skipped existing {src_file.name} ({self.progress_pct:.1f}%)"
+                        continue
+
+                    dest_temp = dest_file.with_suffix(dest_file.suffix + ".part")
                     dest_temp.parent.mkdir(parents=True, exist_ok=True)
 
                     with open(src_file, "rb") as fsrc, open(dest_temp, "wb") as fdest:
@@ -343,11 +374,14 @@ class PoolMigrator:
                                 dt = now - last_calc_time
                                 if dt >= 0.5:
                                     self.speed_mbps = (bytes_since_calc / (1024 * 1024)) / dt
-                                    remaining = self.total_batch_bytes - self.transferred_batch_bytes
+                                    remaining = max(0, self.total_batch_bytes - self.transferred_batch_bytes)
                                     if self.speed_mbps > 0:
                                         self.eta_seconds = int((remaining / (1024 * 1024)) / self.speed_mbps)
-                                    self.progress_pct = (self.transferred_batch_bytes / self.total_batch_bytes) * 100
-                                    self.status_message = f"Moving {self.current_item_name}: {self.progress_pct:.1f}% ({self.speed_mbps:.1f} MB/s)"
+                                    else:
+                                        self.eta_seconds = 0
+                                    self.progress_pct = (self.transferred_batch_bytes / self.total_batch_bytes) * 100 if self.total_batch_bytes > 0 else 100.0
+                                    turbo_tag = " [⚡ Turbo]" if turbo_mode else ""
+                                    self.status_message = f"Moving {self.current_item_name}{turbo_tag}: {self.progress_pct:.1f}% ({self.speed_mbps:.1f} MB/s)"
                                     last_calc_time = now
                                     bytes_since_calc = 0
 
@@ -362,17 +396,31 @@ class PoolMigrator:
                     dest_temp.rename(dest_file)
 
                     # Remove source file
-                    scanner.safe_delete_file(str(src_file), use_recycle_bin=use_recycle_bin)
+                    if turbo_mode or not use_recycle_bin:
+                        try:
+                            os.remove(src_file)
+                        except Exception:
+                            scanner.safe_delete_file(str(src_file), use_recycle_bin=False)
+                    else:
+                        scanner.safe_delete_file(str(src_file), use_recycle_bin=use_recycle_bin)
 
                 # Post-migration directory cleanup for empty folders
                 for p_str in affected_items_set:
                     p = Path(p_str)
                     if p.is_dir() and p.exists():
                         try:
-                            # Remove if empty or only contains desktop.ini/.DS_Store
-                            remaining_files = [f for f in p.rglob("*") if f.is_file()]
-                            if not remaining_files:
-                                shutil.rmtree(p, ignore_errors=True)
+                            for root, dirs, files in os.walk(p, topdown=False):
+                                non_junk = [f for f in files if f.lower() not in ("desktop.ini", "thumbs.db", ".ds_store")]
+                                if not non_junk:
+                                    for junk in files:
+                                        try:
+                                            os.remove(os.path.join(root, junk))
+                                        except Exception:
+                                            pass
+                                    try:
+                                        os.rmdir(root)
+                                    except Exception:
+                                        pass
                         except Exception:
                             pass
 
@@ -391,11 +439,21 @@ class PoolMigrator:
                 with self._lock:
                     self.is_migrating = False
                     self.status_message = "Migration cancelled by user."
+                try:
+                    if 'dest_temp' in locals() and dest_temp.exists():
+                        dest_temp.unlink(missing_ok=True)
+                except Exception:
+                    pass
             except Exception as e:
                 with self._lock:
                     self.is_migrating = False
                     self.errors.append(str(e))
                     self.status_message = f"Error during migration: {str(e)}"
+                try:
+                    if 'dest_temp' in locals() and dest_temp.exists():
+                        dest_temp.unlink(missing_ok=True)
+                except Exception:
+                    pass
 
         self._thread = threading.Thread(target=worker, daemon=True)
         self._thread.start()
@@ -417,6 +475,7 @@ class PoolMigrator:
         with self._lock:
             return {
                 "is_migrating": self.is_migrating,
+                "turbo_mode": self.turbo_mode,
                 "source_drive": self.source_drive,
                 "target_drive": self.target_drive,
                 "total_items": self.total_items,

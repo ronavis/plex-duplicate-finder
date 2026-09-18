@@ -458,8 +458,11 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
             src_drive = body.get("source_drive", "R")
             target_drive = body.get("target_drive", "")
             item_paths = body.get("item_paths", [])
-            use_bin = body.get("use_recycle_bin", True)
-            res = pool_migrator.pool_migrator.start_batch_migration(src_drive, target_drive, item_paths, use_bin)
+            use_bin = body.get("use_recycle_bin", False)
+            turbo = body.get("turbo_mode", True)
+            res = pool_migrator.pool_migrator.start_batch_migration(
+                src_drive, target_drive, item_paths, use_bin, turbo_mode=turbo
+            )
             self._send_json(200, res)
 
         elif path == "/api/migrator/cancel":

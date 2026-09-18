@@ -636,11 +636,15 @@
             </div>
           </div>
 
-          <!-- Recycle Bin Safety Toggle -->
-          <div class="migrator-safety-row">
-            <label class="checkbox-label">
-              <input type="checkbox" id="check-migrator-recycle-bin" checked>
-              <span>Move source files to Windows Recycle Bin after verified copy (Recommended for safety)</span>
+          <!-- Turbo & Safety Controls -->
+          <div class="migrator-safety-row" style="display: flex; flex-direction: column; gap: 8px; margin: 12px 0;">
+            <label class="checkbox-label" style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+              <input type="checkbox" id="check-migrator-turbo" checked>
+              <span><strong style="color: var(--plex-gold);">⚡ Turbo Mode (Recommended):</strong> 64 MB sequential streaming buffer + direct NTFS space reclaim (Fastest disk throughput)</span>
+            </label>
+            <label class="checkbox-label" style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+              <input type="checkbox" id="check-migrator-recycle-bin">
+              <span style="color: var(--text-muted); font-size: 0.85rem;">Preserve source files in Windows Recycle Bin (Slow for large multi-TB collections; locks Recycle Bin database)</span>
             </label>
           </div>
 
@@ -649,7 +653,10 @@
             <div class="migrator-progress-card">
               <div class="progress-title-row">
                 <div class="progress-item-title" id="migrator-prog-item">Moving Title...</div>
-                <div class="progress-speed" id="migrator-prog-speed">0.0 MB/s</div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span id="migrator-prog-turbo-badge" class="badge badge-accent">⚡ Turbo 64MB</span>
+                  <div class="progress-speed" id="migrator-prog-speed">0.0 MB/s</div>
+                </div>
               </div>
               <div class="progress-file-sub" id="migrator-prog-file">Preparing files...</div>
 
@@ -675,7 +682,7 @@
             <strong id="migrator-summary-size" style="color: var(--plex-gold);">0.00 GB</strong> to migrate
           </div>
           <button id="btn-migrator-close" class="btn btn-secondary">Close</button>
-          <button id="btn-migrator-start" class="btn btn-primary" disabled>🚀 Start Safe Migration</button>
+          <button id="btn-migrator-start" class="btn btn-primary" disabled>⚡ Start Turbo Migration</button>
         </div>
       </div>
     </div>

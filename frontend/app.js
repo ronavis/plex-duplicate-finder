@@ -160,6 +160,7 @@ const impactSrcDetails = document.getElementById('impact-src-details');
 const impactDstLetter = document.getElementById('impact-dst-letter');
 const impactDstBar = document.getElementById('impact-dst-bar');
 const impactDstDetails = document.getElementById('impact-dst-details');
+const checkMigratorTurbo = document.getElementById('check-migrator-turbo');
 const checkMigratorRecycleBin = document.getElementById('check-migrator-recycle-bin');
 const migratorSummaryCount = document.getElementById('migrator-summary-count');
 const migratorSummarySize = document.getElementById('migrator-summary-size');
@@ -167,6 +168,7 @@ const btnMigratorStart = document.getElementById('btn-migrator-start');
 const btnMigratorClearSelection = document.getElementById('btn-migrator-clear-selection');
 const migratorProgressOverlay = document.getElementById('migrator-progress-overlay');
 const migratorProgItem = document.getElementById('migrator-prog-item');
+const migratorProgTurboBadge = document.getElementById('migrator-prog-turbo-badge');
 const migratorProgSpeed = document.getElementById('migrator-prog-speed');
 const migratorProgFile = document.getElementById('migrator-prog-file');
 const migratorProgBar = document.getElementById('migrator-prog-bar');
@@ -372,6 +374,13 @@ function setupEventListeners() {
   if (btnMigratorClearSelection) btnMigratorClearSelection.addEventListener('click', clearMigratorSelection);
   if (btnMigratorStart) btnMigratorStart.addEventListener('click', startMigratorExecution);
   if (btnMigratorCancel) btnMigratorCancel.addEventListener('click', cancelMigratorExecution);
+  if (checkMigratorTurbo) {
+    checkMigratorTurbo.addEventListener('change', () => {
+      if (btnMigratorStart) {
+        btnMigratorStart.textContent = checkMigratorTurbo.checked ? '⚡ Start Turbo Migration' : '🚀 Start Safe Migration';
+      }
+    });
+  }
 
   document.querySelectorAll('[data-migrator-cat]').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -2010,7 +2019,8 @@ async function startMigratorExecution() {
   const src = selectMigratorSource.value;
   const dest = selectMigratorDest.value;
   const paths = Array.from(selectedMigratorItemPaths);
-  const useBin = checkMigratorRecycleBin ? checkMigratorRecycleBin.checked : true;
+  const turboMode = checkMigratorTurbo ? checkMigratorTurbo.checked : true;
+  const useBin = checkMigratorRecycleBin ? checkMigratorRecycleBin.checked : false;
 
   if (!dest) {
     alert('Please select an eligible destination drive.');
@@ -2021,7 +2031,8 @@ async function startMigratorExecution() {
     return;
   }
 
-  const confirmMsg = `Are you sure you want to migrate ${paths.length} item(s) from Drive ${src}: to Drive ${dest}:?\n\nFiles will be safely copied and byte-verified before source removal.`;
+  const modeTag = turboMode ? '⚡ Turbo Mode (64MB Streaming Buffer & Direct Reclaim)' : 'Safe Mode (Windows Recycle Bin)';
+  const confirmMsg = `Migrate ${paths.length} item(s) from Drive ${src}: to Drive ${dest}: in ${modeTag}?\n\nFiles are safely copied, verified byte-for-byte, and any previously copied files will be intelligently skipped to resume instantly.`;
   if (!confirm(confirmMsg)) return;
 
   btnMigratorStart.disabled = true;
@@ -2034,7 +2045,8 @@ async function startMigratorExecution() {
         source_drive: src,
         target_drive: dest,
         item_paths: paths,
-        use_recycle_bin: useBin
+        use_recycle_bin: useBin,
+        turbo_mode: turboMode
       })
     });
     const data = await res.json();
@@ -2065,6 +2077,14 @@ async function pollMigratorStatus() {
     if (data.is_migrating) {
       if (migratorProgItem) migratorProgItem.textContent = data.current_item_name || 'Moving media files...';
       if (migratorProgSpeed) migratorProgSpeed.textContent = `${data.speed_mbps} MB/s`;
+      if (migratorProgTurboBadge) {
+        if (data.turbo_mode) {
+          migratorProgTurboBadge.style.display = 'inline-block';
+          migratorProgTurboBadge.textContent = '⚡ Turbo 64MB';
+        } else {
+          migratorProgTurboBadge.style.display = 'none';
+        }
+      }
       if (migratorProgFile) migratorProgFile.textContent = data.current_file_name || 'Transferring chunks...';
       if (migratorProgBar) migratorProgBar.style.width = `${data.progress_pct}%`;
       if (migratorProgBytes) migratorProgBytes.textContent = `${formatBytes(data.transferred_batch_bytes)} / ${formatBytes(data.total_batch_bytes)} (${data.progress_pct}%)`;

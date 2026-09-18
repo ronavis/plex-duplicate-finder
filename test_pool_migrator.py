@@ -56,8 +56,13 @@ class TestPoolMigrator(unittest.TestCase):
         self.assertIn("recommended_drive", res)
         self.assertGreater(len(res["candidates"]), 0)
 
+    def test_turbo_mode_and_resume_skip(self):
+        migrator = pool_migrator.PoolMigrator()
+        self.assertTrue(migrator.turbo_mode)
+        status = migrator.get_status()
+        self.assertTrue(status["turbo_mode"])
+        self.assertFalse(status["is_migrating"])
 
-class TestMigratorApi(unittest.TestCase):
     def test_migrator_status_endpoint(self):
         req = urllib.request.Request("http://127.0.0.1:8282/api/migrator/status")
         with urllib.request.urlopen(req, timeout=5.0) as resp:
