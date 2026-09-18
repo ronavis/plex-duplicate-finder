@@ -27,6 +27,7 @@ import balancer
 import cleaner
 import plex_api
 import pool_migrator
+import tmdb_api
 
 PORT = 8282
 WEB_DIR = Path(__file__).parent / "frontend"
@@ -166,11 +167,28 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
                 except Exception as e:
                     self._send_json(500, {"status": "error", "message": str(e)})
 
-        # Feature: Plex Poster Proxy / Artwork Search
+        # Feature: Plex & TMDb Poster Proxy / Artwork Search
         elif path == "/api/plex/poster":
             title = query.get("title", [""])[0]
             year_str = query.get("year", [""])[0]
             year = int(year_str) if year_str.isdigit() else None
+            prefer_tmdb = query.get("source", [""])[0] == "tmdb" or tmdb_api.tmdb_client.priority == "tmdb_first"
+
+            # 1. Try TMDb first if preferred and configured
+            if prefer_tmdb and tmdb_api.tmdb_client.is_configured():
+                img_data = tmdb_api.tmdb_client.get_poster_by_title(title, year)
+                if img_data:
+                    data, ctype = img_data
+                    self.send_response(200)
+                    self.send_header("Content-Type", ctype)
+                    self.send_header("Content-Length", str(len(data)))
+                    self.send_header("Cache-Control", "public, max-age=86400")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+
+            # 2. Try Plex server
             thumb = plex_api.plex_client.search_poster(title, year)
             if thumb:
                 img_data = plex_api.plex_client.get_thumbnail_data(thumb)
@@ -184,6 +202,21 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
                     self.end_headers()
                     self.wfile.write(data)
                     return
+
+            # 3. Fallback: If Plex did not have the poster, automatically query TMDb!
+            if tmdb_api.tmdb_client.is_configured():
+                img_data = tmdb_api.tmdb_client.get_poster_by_title(title, year)
+                if img_data:
+                    data, ctype = img_data
+                    self.send_response(200)
+                    self.send_header("Content-Type", ctype)
+                    self.send_header("Content-Length", str(len(data)))
+                    self.send_header("Cache-Control", "public, max-age=86400")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+
             self._send_json(404, {"status": "not_found", "message": "Poster not found"})
 
         # Feature: Direct Plex Thumb Proxy
@@ -202,6 +235,33 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
                     self.wfile.write(data)
                     return
             self._send_json(404, {"status": "not_found", "message": "Thumbnail not found"})
+
+        # Feature: TMDb Status & Direct Poster Search
+        elif path == "/api/tmdb/status":
+            self._send_json(200, {
+                "configured": tmdb_api.tmdb_client.is_configured(),
+                "has_key": bool(tmdb_api.tmdb_client.api_key),
+                "masked_key": (tmdb_api.tmdb_client.api_key[:4] + "..." + tmdb_api.tmdb_client.api_key[-4:]) if len(tmdb_api.tmdb_client.api_key) >= 8 else "",
+                "enabled": tmdb_api.tmdb_client.enabled,
+                "priority": tmdb_api.tmdb_client.priority
+            })
+
+        elif path == "/api/tmdb/poster":
+            title = query.get("title", [""])[0]
+            year_str = query.get("year", [""])[0]
+            year = int(year_str) if year_str.isdigit() else None
+            img_data = tmdb_api.tmdb_client.get_poster_by_title(title, year)
+            if img_data:
+                data, ctype = img_data
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "public, max-age=86400")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            self._send_json(404, {"status": "not_found", "message": "TMDb poster not found"})
 
         else:
             # Fallback to serving static frontend files
@@ -468,6 +528,19 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
         elif path == "/api/migrator/cancel":
             pool_migrator.pool_migrator.cancel_migration()
             self._send_json(200, {"status": "ok", "message": "Migration cancel requested"})
+
+        # Feature: TMDb Settings & Verification
+        elif path == "/api/tmdb/config":
+            api_key = body.get("api_key", "").strip()
+            enabled = body.get("enabled", True)
+            priority = body.get("priority", "plex_first")
+            res = tmdb_api.tmdb_client.save_config(api_key, enabled, priority)
+            self._send_json(200, res)
+
+        elif path == "/api/tmdb/test":
+            api_key = body.get("api_key")
+            res = tmdb_api.tmdb_client.test_connection(api_key)
+            self._send_json(200, res)
 
         else:
             self._send_json(404, {"status": "not_found"})

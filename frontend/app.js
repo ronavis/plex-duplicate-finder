@@ -95,6 +95,15 @@ const oauthServersBox = document.getElementById('oauth-servers-box');
 const selectDiscoveredServer = document.getElementById('select-discovered-server');
 const btnConnectDiscovered = document.getElementById('btn-connect-discovered');
 
+// TMDb Settings Elements
+const inputTmdbKey = document.getElementById('input-tmdb-key');
+const btnToggleTmdbKey = document.getElementById('btn-toggle-tmdb-key');
+const btnTestTmdb = document.getElementById('btn-test-tmdb');
+const selectPosterPriority = document.getElementById('select-poster-priority');
+const checkTmdbEnabled = document.getElementById('check-tmdb-enabled');
+const tmdbTestResult = document.getElementById('tmdb-test-result');
+const tmdbStatusBadge = document.getElementById('tmdb-status-badge');
+
 // Cleaner Modal
 const modalCleaner = document.getElementById('modal-cleaner');
 const btnModalCleanerClose = document.getElementById('btn-modal-cleaner-close');
@@ -182,6 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
   initScanState();
   checkPlexInitialStatus();
+  loadTmdbStatus();
 });
 
 // Restore cached scan results or resume active scan on page load
@@ -321,6 +331,8 @@ function setupEventListeners() {
   if (btnPlexOauth) btnPlexOauth.addEventListener('click', startPlexOAuth);
   if (btnCancelOauth) btnCancelOauth.addEventListener('click', cancelPlexOAuth);
   if (btnConnectDiscovered) btnConnectDiscovered.addEventListener('click', connectSelectedDiscoveredServer);
+  if (btnTestTmdb) btnTestTmdb.addEventListener('click', testTmdbConnection);
+  if (btnToggleTmdbKey) btnToggleTmdbKey.addEventListener('click', toggleTmdbKeyVisibility);
 
   // Feature 6: Cleaner Modal Setup
   if (btnOpenCleanerModal) btnOpenCleanerModal.addEventListener('click', openCleanerModal);
@@ -1331,6 +1343,7 @@ let discoveredServersList = [];
 async function openPlexModal() {
   modalPlex.classList.remove('hidden');
   plexTestResult.classList.add('hidden');
+  if (tmdbTestResult) tmdbTestResult.classList.add('hidden');
   if (oauthStatusBox) oauthStatusBox.classList.add('hidden');
   if (oauthServersBox) oauthServersBox.classList.add('hidden');
   if (btnPlexOauth) btnPlexOauth.disabled = false;
@@ -1347,6 +1360,89 @@ async function openPlexModal() {
       checkPlexAutorefresh.checked = data.config.auto_refresh_on_delete;
     }
   } catch (e) {}
+
+  loadTmdbStatus();
+}
+
+async function loadTmdbStatus() {
+  if (!inputTmdbKey) return;
+  try {
+    const res = await fetch('/api/tmdb/status');
+    const data = await res.json();
+    if (data.configured || data.has_key) {
+      if (!inputTmdbKey.value || inputTmdbKey.value === '') {
+        inputTmdbKey.value = data.masked_key || '';
+      }
+      if (checkTmdbEnabled) checkTmdbEnabled.checked = data.enabled;
+      if (selectPosterPriority && data.priority) selectPosterPriority.value = data.priority;
+      if (tmdbStatusBadge) {
+        tmdbStatusBadge.textContent = '⚡ Connected & Active';
+        tmdbStatusBadge.className = 'badge badge-accent';
+      }
+    } else {
+      if (tmdbStatusBadge) {
+        tmdbStatusBadge.textContent = 'Optional Fallback';
+        tmdbStatusBadge.className = 'badge badge-res-1080';
+      }
+    }
+  } catch (e) {
+    console.warn('TMDb status check failed:', e);
+  }
+}
+
+function toggleTmdbKeyVisibility() {
+  if (!inputTmdbKey) return;
+  if (inputTmdbKey.type === 'password') {
+    inputTmdbKey.type = 'text';
+    if (btnToggleTmdbKey) btnToggleTmdbKey.textContent = '🔒';
+  } else {
+    inputTmdbKey.type = 'password';
+    if (btnToggleTmdbKey) btnToggleTmdbKey.textContent = '👁️';
+  }
+}
+
+async function testTmdbConnection() {
+  if (!btnTestTmdb || !tmdbTestResult) return;
+  const key = inputTmdbKey ? inputTmdbKey.value.trim() : '';
+  if (!key) {
+    tmdbTestResult.className = 'diagnostic-box error';
+    tmdbTestResult.classList.remove('hidden');
+    tmdbTestResult.textContent = 'Please enter a TMDb API Key or v4 Read Access Token first.';
+    return;
+  }
+
+  btnTestTmdb.disabled = true;
+  btnTestTmdb.textContent = 'Testing...';
+  tmdbTestResult.className = 'diagnostic-box';
+  tmdbTestResult.classList.remove('hidden');
+  tmdbTestResult.textContent = 'Connecting to The Movie Database (TMDb)...';
+
+  try {
+    const res = await fetch('/api/tmdb/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: key })
+    });
+    const data = await res.json();
+
+    if (data.connected) {
+      tmdbTestResult.className = 'diagnostic-box success';
+      tmdbTestResult.innerHTML = `<strong>✅ ${escapeHtml(data.message)}</strong><br>Poster artwork discovery is ready for RiffTrax and Plex media.`;
+      if (tmdbStatusBadge) {
+        tmdbStatusBadge.textContent = '⚡ Connected & Active';
+        tmdbStatusBadge.className = 'badge badge-accent';
+      }
+    } else {
+      tmdbTestResult.className = 'diagnostic-box error';
+      tmdbTestResult.innerHTML = `<strong>❌ Connection Failed</strong><br>${escapeHtml(data.error || 'Invalid TMDb API Key.')}`;
+    }
+  } catch (err) {
+    tmdbTestResult.className = 'diagnostic-box error';
+    tmdbTestResult.textContent = 'Error testing TMDb: ' + err.message;
+  } finally {
+    btnTestTmdb.disabled = false;
+    btnTestTmdb.textContent = 'Test TMDb';
+  }
 }
 
 async function startPlexOAuth() {
@@ -1573,10 +1669,41 @@ async function savePlexConfig() {
       })
     });
     const data = await res.json();
+
+    // Also save TMDb settings
+    const tmdbKey = inputTmdbKey ? inputTmdbKey.value.trim() : '';
+    const tmdbEnabled = checkTmdbEnabled ? checkTmdbEnabled.checked : true;
+    const tmdbPriority = selectPosterPriority ? selectPosterPriority.value : 'plex_first';
+
+    if (tmdbKey && !tmdbKey.includes('...')) {
+      await fetch('/api/tmdb/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_key: tmdbKey,
+          enabled: tmdbEnabled,
+          priority: tmdbPriority
+        })
+      });
+    } else {
+      await fetch('/api/tmdb/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          enabled: tmdbEnabled,
+          priority: tmdbPriority
+        })
+      });
+    }
+
     if (data.status === 'ok') {
-      showToast('Plex server configuration saved!');
+      showToast('Plex and TMDb configuration saved!');
       modalPlex.classList.add('hidden');
       checkPlexInitialStatus();
+      loadTmdbStatus();
+      if (duplicateGroups && duplicateGroups.length > 0) {
+        renderDuplicateGroups();
+      }
     } else {
       alert('Failed to save config: ' + data.message);
     }

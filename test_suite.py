@@ -200,6 +200,29 @@ class TestApiEndpoints(unittest.TestCase):
         except urllib.error.HTTPError as e:
             self.assertEqual(e.code, 404)
 
+    def test_tmdb_status_endpoint(self):
+        import urllib.request
+        req = urllib.request.Request("http://127.0.0.1:8282/api/tmdb/status")
+        with urllib.request.urlopen(req, timeout=5.0) as resp:
+            self.assertEqual(resp.status, 200)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertIn("configured", data)
+            self.assertIn("enabled", data)
+            self.assertIn("priority", data)
+
+    def test_tmdb_test_endpoint(self):
+        import urllib.request
+        req = urllib.request.Request(
+            "http://127.0.0.1:8282/api/tmdb/test",
+            data=json.dumps({"api_key": "mock_invalid_key_12345"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=8.0) as resp:
+            self.assertEqual(resp.status, 200)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertIn("connected", data)
+            self.assertFalse(data["connected"])
+
 
 if __name__ == "__main__":
     unittest.main()

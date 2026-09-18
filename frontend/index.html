@@ -30,9 +30,9 @@
       <div class="header-right-group">
         <!-- Top Tool Actions -->
         <div class="header-nav-actions">
-          <button id="btn-open-plex-modal" class="btn btn-secondary btn-sm" title="Configure connection to your Plex Media Server">
+          <button id="btn-open-plex-modal" class="btn btn-secondary btn-sm" title="Configure Plex Server and TMDb Poster Artwork">
             <span id="plex-status-dot" class="status-dot dot-gray"></span>
-            <span>⚙️ Plex Connect</span>
+            <span>⚙️ Plex &amp; TMDb Settings</span>
           </button>
           <button id="btn-open-migrator-modal" class="btn btn-secondary btn-sm" title="Migrate non-duplicate TV shows and movies to free up your primary drive">
             <span style="color: var(--plex-gold);">⇄</span>
@@ -380,10 +380,56 @@
           </div>
 
           <div id="plex-test-result" class="diagnostic-box hidden"></div>
+
+          <!-- Feature: The Movie Database (TMDb) Poster Integration -->
+          <div class="modal-section-divider" style="margin-top: 24px;">
+            <span>THE MOVIE DATABASE (TMDB) ARTWORK INTEGRATION</span>
+          </div>
+
+          <div class="tmdb-config-card" style="border: 1px solid var(--border-color); border-radius: 8px; padding: 18px; background: rgba(255, 255, 255, 0.02);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.2rem;">🎬</span>
+                <strong style="color: var(--plex-gold); font-size: 1.05rem;">TMDb Poster Artwork Discovery</strong>
+              </div>
+              <span id="tmdb-status-badge" class="badge badge-accent">Optional Fallback</span>
+            </div>
+            
+            <p style="color: var(--text-muted); font-size: 0.85rem; line-height: 1.45; margin-bottom: 14px;">
+              Use your personal TMDb API key to discover high-resolution poster artwork for movies and shows — especially useful for <strong>RiffTrax</strong>, specialty collections, and libraries where Plex does not have poster art.
+            </p>
+
+            <div class="form-group">
+              <label for="input-tmdb-key">TMDb API Key or API Read Access Token</label>
+              <div style="display: flex; gap: 10px;">
+                <input type="password" id="input-tmdb-key" class="input-control" placeholder="Paste your 32-character API key or v4 Bearer token" style="flex: 1;">
+                <button type="button" id="btn-toggle-tmdb-key" class="btn btn-secondary btn-sm" title="Show/Hide Key">👁️</button>
+                <button type="button" id="btn-test-tmdb" class="btn btn-secondary btn-sm">Test TMDb</button>
+              </div>
+              <span class="field-hint">Free developer API keys are available at <a href="https://www.themoviedb.org/settings/api" target="_blank" style="color: var(--plex-gold); text-decoration: underline;">themoviedb.org/settings/api</a>. Both v3 keys and v4 Bearer tokens are supported.</span>
+            </div>
+
+            <div class="form-group" style="margin-top: 10px;">
+              <label for="select-poster-priority">Artwork Source Priority:</label>
+              <select id="select-poster-priority" class="input-control select-control">
+                <option value="plex_first">Plex First &rarr; TMDb Fallback (Recommended)</option>
+                <option value="tmdb_first">TMDb First &rarr; Plex Fallback</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="margin-top: 10px;">
+              <label class="checkbox-label">
+                <input type="checkbox" id="check-tmdb-enabled" checked>
+                <span>Enable TMDb poster fallback when Plex artwork is missing</span>
+              </label>
+            </div>
+
+            <div id="tmdb-test-result" class="diagnostic-box hidden" style="margin-top: 12px;"></div>
+          </div>
         </div>
         <div class="modal-footer">
-          <button id="btn-test-plex" class="btn btn-secondary">Test Connection</button>
-          <button id="btn-save-plex" class="btn btn-primary">Save Configuration</button>
+          <button id="btn-test-plex" class="btn btn-secondary">Test Plex</button>
+          <button id="btn-save-plex" class="btn btn-primary">Save All Settings</button>
         </div>
       </div>
     </div>
