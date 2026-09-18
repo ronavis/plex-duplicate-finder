@@ -8,6 +8,7 @@ import os
 import time
 import shutil
 import threading
+import queue
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
@@ -354,36 +355,102 @@ class PoolMigrator:
                     dest_temp = dest_file.with_suffix(dest_file.suffix + ".part")
                     dest_temp.parent.mkdir(parents=True, exist_ok=True)
 
-                    with open(src_file, "rb") as fsrc, open(dest_temp, "wb") as fdest:
-                        while True:
-                            if self.cancel_requested:
-                                raise InterruptedError("Migration cancelled by user.")
+                    if turbo_mode and file_size > (8 * 1024 * 1024):
+                        # Pipelined dual-threaded copy: Reader thread reads ahead into RAM queue
+                        # while Writer thread writes to destination concurrently across disks
+                        pipe_q = queue.Queue(maxsize=2)
+                        pipe_errors = []
 
-                            chunk = fsrc.read(chunk_size)
-                            if not chunk:
-                                break
+                        def pipe_reader():
+                            try:
+                                with open(src_file, "rb") as fsrc:
+                                    while not self.cancel_requested:
+                                        chunk = fsrc.read(chunk_size)
+                                        if not chunk:
+                                            break
+                                        pipe_q.put(chunk)
+                            except Exception as e:
+                                pipe_errors.append(e)
+                            finally:
+                                pipe_q.put(None)
 
-                            fdest.write(chunk)
-                            chunk_len = len(chunk)
+                        def pipe_writer():
+                            nonlocal bytes_since_calc, last_calc_time
+                            try:
+                                with open(dest_temp, "wb") as fdest:
+                                    while True:
+                                        if self.cancel_requested:
+                                            break
+                                        chunk = pipe_q.get()
+                                        if chunk is None:
+                                            break
+                                        fdest.write(chunk)
+                                        chunk_len = len(chunk)
 
-                            with self._lock:
-                                self.transferred_batch_bytes += chunk_len
-                                self.current_file_transferred += chunk_len
-                                bytes_since_calc += chunk_len
-                                now = time.time()
-                                dt = now - last_calc_time
-                                if dt >= 0.5:
-                                    self.speed_mbps = (bytes_since_calc / (1024 * 1024)) / dt
-                                    remaining = max(0, self.total_batch_bytes - self.transferred_batch_bytes)
-                                    if self.speed_mbps > 0:
-                                        self.eta_seconds = int((remaining / (1024 * 1024)) / self.speed_mbps)
-                                    else:
-                                        self.eta_seconds = 0
-                                    self.progress_pct = (self.transferred_batch_bytes / self.total_batch_bytes) * 100 if self.total_batch_bytes > 0 else 100.0
-                                    turbo_tag = " [⚡ Turbo]" if turbo_mode else ""
-                                    self.status_message = f"Moving {self.current_item_name}{turbo_tag}: {self.progress_pct:.1f}% ({self.speed_mbps:.1f} MB/s)"
-                                    last_calc_time = now
-                                    bytes_since_calc = 0
+                                        with self._lock:
+                                            self.transferred_batch_bytes += chunk_len
+                                            self.current_file_transferred += chunk_len
+                                            bytes_since_calc += chunk_len
+                                            now = time.time()
+                                            dt = now - last_calc_time
+                                            if dt >= 0.5:
+                                                self.speed_mbps = (bytes_since_calc / (1024 * 1024)) / dt
+                                                remaining = max(0, self.total_batch_bytes - self.transferred_batch_bytes)
+                                                if self.speed_mbps > 0:
+                                                    self.eta_seconds = int((remaining / (1024 * 1024)) / self.speed_mbps)
+                                                else:
+                                                    self.eta_seconds = 0
+                                                self.progress_pct = (self.transferred_batch_bytes / self.total_batch_bytes) * 100 if self.total_batch_bytes > 0 else 100.0
+                                                self.status_message = f"Moving {self.current_item_name} [⚡ Turbo Pipelined]: {self.progress_pct:.1f}% ({self.speed_mbps:.1f} MB/s)"
+                                                last_calc_time = now
+                                                bytes_since_calc = 0
+                            except Exception as e:
+                                pipe_errors.append(e)
+
+                        t_reader = threading.Thread(target=pipe_reader, daemon=True, name="MigratorReader")
+                        t_writer = threading.Thread(target=pipe_writer, daemon=True, name="MigratorWriter")
+                        t_reader.start()
+                        t_writer.start()
+                        t_reader.join()
+                        t_writer.join()
+
+                        if self.cancel_requested:
+                            dest_temp.unlink(missing_ok=True)
+                            raise InterruptedError("Migration cancelled by user.")
+                        if pipe_errors:
+                            dest_temp.unlink(missing_ok=True)
+                            raise pipe_errors[0]
+                    else:
+                        with open(src_file, "rb") as fsrc, open(dest_temp, "wb") as fdest:
+                            while True:
+                                if self.cancel_requested:
+                                    raise InterruptedError("Migration cancelled by user.")
+
+                                chunk = fsrc.read(chunk_size)
+                                if not chunk:
+                                    break
+
+                                fdest.write(chunk)
+                                chunk_len = len(chunk)
+
+                                with self._lock:
+                                    self.transferred_batch_bytes += chunk_len
+                                    self.current_file_transferred += chunk_len
+                                    bytes_since_calc += chunk_len
+                                    now = time.time()
+                                    dt = now - last_calc_time
+                                    if dt >= 0.5:
+                                        self.speed_mbps = (bytes_since_calc / (1024 * 1024)) / dt
+                                        remaining = max(0, self.total_batch_bytes - self.transferred_batch_bytes)
+                                        if self.speed_mbps > 0:
+                                            self.eta_seconds = int((remaining / (1024 * 1024)) / self.speed_mbps)
+                                        else:
+                                            self.eta_seconds = 0
+                                        self.progress_pct = (self.transferred_batch_bytes / self.total_batch_bytes) * 100 if self.total_batch_bytes > 0 else 100.0
+                                        turbo_tag = " [⚡ Turbo]" if turbo_mode else ""
+                                        self.status_message = f"Moving {self.current_item_name}{turbo_tag}: {self.progress_pct:.1f}% ({self.speed_mbps:.1f} MB/s)"
+                                        last_calc_time = now
+                                        bytes_since_calc = 0
 
                     # Verify integrity
                     if dest_temp.stat().st_size != file_size:
