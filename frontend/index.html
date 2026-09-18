@@ -34,6 +34,10 @@
             <span id="plex-status-dot" class="status-dot dot-gray"></span>
             <span>⚙️ Plex Connect</span>
           </button>
+          <button id="btn-open-migrator-modal" class="btn btn-secondary btn-sm" title="Migrate non-duplicate TV shows and movies to free up your primary drive">
+            <span style="color: var(--plex-gold);">⇄</span>
+            <span>Drive Offloader</span>
+          </button>
           <button id="btn-open-cleaner-modal" class="btn btn-secondary btn-sm" title="Scan and remove empty folders, sample clips, and orphan junk">
             <span>🧹 Library Cleaner</span>
           </button>
@@ -532,6 +536,146 @@
         </div>
         <div class="modal-footer">
           <button id="btn-modal-inspect-close-footer" class="btn btn-secondary">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Smart Drive Offloader / Pool Balancer Modal -->
+    <div id="modal-migrator" class="modal-backdrop hidden">
+      <div class="modal-card modal-xl">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span style="color: var(--plex-gold); font-size: 1.3rem;">⇄</span>
+            <h3>Smart Drive Offloader &amp; Storage Pool Balancer</h3>
+          </div>
+          <button id="btn-modal-migrator-close" class="modal-close-btn">&times;</button>
+        </div>
+        
+        <div class="modal-body migrator-modal-body">
+          <p class="modal-description">Free up space on your primary staging drive (e.g. <strong>Drive R:</strong>) by moving entire non-duplicate TV series or movie collections to another drive with free capacity. Directory structures are preserved and Plex is automatically synced.</p>
+
+          <!-- Step 1: Source Drive & Filter Controls -->
+          <div class="migrator-controls-bar">
+            <div class="migrator-control-group">
+              <label for="select-migrator-source">Source Drive to Offload:</label>
+              <select id="select-migrator-source" class="input-control select-control"></select>
+            </div>
+
+            <div class="migrator-control-group">
+              <label>Category:</label>
+              <div class="btn-group-pill">
+                <button type="button" class="btn-pill-opt active" data-migrator-cat="all">All</button>
+                <button type="button" class="btn-pill-opt" data-migrator-cat="movies">Movies</button>
+                <button type="button" class="btn-pill-opt" data-migrator-cat="tv">TV Shows</button>
+              </div>
+            </div>
+
+            <div class="migrator-control-group migrator-search-group">
+              <label for="input-migrator-search">Search Shows / Movies:</label>
+              <input type="text" id="input-migrator-search" class="input-control" placeholder="Filter by title...">
+            </div>
+          </div>
+
+          <!-- Smart Target Reclaim Quick Buttons -->
+          <div class="smart-target-strip">
+            <span class="smart-target-label">⚡ Smart Auto-Select to Free Space:</span>
+            <button type="button" class="btn-quick-target" data-target-gb="250">+ Free 250 GB</button>
+            <button type="button" class="btn-quick-target" data-target-gb="500">+ Free 500 GB</button>
+            <button type="button" class="btn-quick-target" data-target-gb="1000">+ Free 1 TB</button>
+            <button type="button" class="btn-quick-target" data-target-gb="2000">+ Free 2 TB</button>
+            <button type="button" id="btn-migrator-clear-selection" class="btn-text-muted" style="margin-left: auto;">Deselect All</button>
+          </div>
+
+          <!-- Step 2: Content Selection Table -->
+          <div class="migrator-table-wrapper">
+            <table class="migrator-table">
+              <thead>
+                <tr>
+                  <th style="width: 44px; text-align: center;"><input type="checkbox" id="check-migrator-select-all"></th>
+                  <th>Title / Folder Name</th>
+                  <th style="width: 110px;">Type</th>
+                  <th style="width: 90px; text-align: center;">Files</th>
+                  <th style="width: 140px; text-align: right;">Size on Disk</th>
+                </tr>
+              </thead>
+              <tbody id="migrator-items-tbody">
+                <tr><td colspan="5" class="table-loading">Select a drive to scan its media contents...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Step 3: Destination Recommendation & Capacity Impact Preview -->
+          <div class="migrator-bottom-panel">
+            <div class="migrator-destination-box">
+              <div class="destination-header">
+                <label for="select-migrator-dest"><strong>Recommended Destination Drive:</strong></label>
+                <span id="migrator-recommended-badge" class="badge badge-accent">Auto Recommended</span>
+              </div>
+              <select id="select-migrator-dest" class="input-control select-control"></select>
+            </div>
+
+            <!-- Capacity Impact Gauge -->
+            <div class="migrator-capacity-impact">
+              <div class="impact-col">
+                <div class="impact-label">Source Drive (<span id="impact-src-letter">R:</span>)</div>
+                <div class="impact-bar-wrap">
+                  <div id="impact-src-bar" class="impact-bar-fill src-bar" style="width: 83.4%;"></div>
+                </div>
+                <div class="impact-details" id="impact-src-details">Select items to preview capacity change</div>
+              </div>
+
+              <div class="impact-arrow">&rarr;</div>
+
+              <div class="impact-col">
+                <div class="impact-label">Target Drive (<span id="impact-dst-letter">J:</span>)</div>
+                <div class="impact-bar-wrap">
+                  <div id="impact-dst-bar" class="impact-bar-fill dst-bar" style="width: 77.7%;"></div>
+                </div>
+                <div class="impact-details" id="impact-dst-details">Select items to preview capacity change</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recycle Bin Safety Toggle -->
+          <div class="migrator-safety-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="check-migrator-recycle-bin" checked>
+              <span>Move source files to Windows Recycle Bin after verified copy (Recommended for safety)</span>
+            </label>
+          </div>
+
+          <!-- Migration In-Progress Overlay -->
+          <div id="migrator-progress-overlay" class="migrator-progress-overlay hidden">
+            <div class="migrator-progress-card">
+              <div class="progress-title-row">
+                <div class="progress-item-title" id="migrator-prog-item">Moving Title...</div>
+                <div class="progress-speed" id="migrator-prog-speed">0.0 MB/s</div>
+              </div>
+              <div class="progress-file-sub" id="migrator-prog-file">Preparing files...</div>
+
+              <div class="progress-bar-track" style="margin: 12px 0 6px;">
+                <div id="migrator-prog-bar" class="progress-bar-fill" style="width: 0%;"></div>
+              </div>
+
+              <div class="progress-stats-row">
+                <span id="migrator-prog-bytes">0 GB / 0 GB (0%)</span>
+                <span id="migrator-prog-eta">ETA: Calculating...</span>
+              </div>
+
+              <div style="text-align: right; margin-top: 14px;">
+                <button id="btn-migrator-cancel" type="button" class="btn btn-secondary btn-sm">Cancel Migration</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <div class="migrator-footer-left">
+            <span id="migrator-summary-count">0</span> items selected &bull; 
+            <strong id="migrator-summary-size" style="color: var(--plex-gold);">0.00 GB</strong> to migrate
+          </div>
+          <button id="btn-migrator-close" class="btn btn-secondary">Close</button>
+          <button id="btn-migrator-start" class="btn btn-primary" disabled>🚀 Start Safe Migration</button>
         </div>
       </div>
     </div>

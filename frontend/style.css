@@ -1839,3 +1839,292 @@ body {
   font-weight: 400;
 }
 
+/* ==========================================================================
+   Smart Drive Offloader / Pool Balancer Styles
+   ========================================================================== */
+
+.modal-xl {
+  max-width: 1040px;
+  width: 95%;
+}
+
+.migrator-modal-body {
+  padding: 20px 24px;
+  max-height: 80vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: relative;
+}
+
+.migrator-controls-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+}
+
+.migrator-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.migrator-control-group label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.migrator-search-group {
+  flex: 1;
+  min-width: 200px;
+}
+
+.btn-group-pill {
+  display: flex;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.btn-pill-opt {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-pill-opt.active {
+  background: var(--plex-gold);
+  color: #000;
+}
+
+.smart-target-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  background: rgba(229, 160, 13, 0.05);
+  border: 1px dashed rgba(229, 160, 13, 0.35);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+
+.smart-target-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--plex-gold);
+}
+
+.btn-quick-target {
+  background: rgba(229, 160, 13, 0.12);
+  border: 1px solid rgba(229, 160, 13, 0.4);
+  color: var(--text-primary);
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-quick-target:hover {
+  background: var(--plex-gold);
+  color: #000;
+  transform: translateY(-1px);
+}
+
+.migrator-table-wrapper {
+  background: #090c14;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.migrator-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.migrator-table th {
+  position: sticky;
+  top: 0;
+  background: #0f131d;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color);
+  z-index: 2;
+}
+
+.migrator-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+}
+
+.migrator-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.migrator-bottom-panel {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+}
+
+.migrator-destination-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.destination-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.migrator-capacity-impact {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.impact-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.impact-label {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.impact-bar-wrap {
+  height: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.impact-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.impact-bar-fill.src-bar {
+  background: linear-gradient(90deg, #10b981, #e5a00d);
+}
+
+.impact-bar-fill.dst-bar {
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+}
+
+.impact-details {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.impact-arrow {
+  font-size: 1.2rem;
+  color: var(--plex-gold);
+  font-weight: bold;
+}
+
+.migrator-safety-row {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.migrator-footer-left {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  margin-right: auto;
+}
+
+/* Progress Overlay */
+.migrator-progress-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(13, 17, 23, 0.92);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  border-radius: var(--radius-md);
+  padding: 24px;
+}
+
+.migrator-progress-card {
+  width: 100%;
+  max-width: 540px;
+  background: #161b26;
+  border: 1px solid rgba(229, 160, 13, 0.4);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+
+.progress-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.progress-item-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--plex-gold);
+}
+
+.progress-speed {
+  font-family: monospace;
+  font-size: 0.9rem;
+  color: #10b981;
+  font-weight: bold;
+}
+
+.progress-file-sub {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.progress-stats-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+

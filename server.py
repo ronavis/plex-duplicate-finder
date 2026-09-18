@@ -26,6 +26,7 @@ import media_inspector
 import balancer
 import cleaner
 import plex_api
+import pool_migrator
 
 PORT = 8282
 WEB_DIR = Path(__file__).parent / "frontend"
@@ -138,6 +139,10 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
         # Feature 4: Balancer Status
         elif path == "/api/balance/status":
             self._send_json(200, {"status": "ok", "balancer": balancer.storage_balancer.get_status()})
+
+        # Smart Drive Offloader / Pool Migrator Status
+        elif path == "/api/migrator/status":
+            self._send_json(200, pool_migrator.pool_migrator.get_status())
 
         # Feature 5: Media Stream Range Requests
         elif path == "/api/media/stream":
@@ -435,6 +440,31 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
                     "connection": conn,
                     "server_url": server_url
                 })
+
+        # Smart Drive Offloader / Pool Migrator Endpoints
+        elif path == "/api/migrator/scan":
+            drive = body.get("drive", "R")
+            cat = body.get("category", "all")
+            res = pool_migrator.pool_migrator.scan_drive_content(drive, cat)
+            self._send_json(200, res)
+
+        elif path == "/api/migrator/recommend":
+            src_drive = body.get("source_drive", "R")
+            selected = body.get("selected_items", [])
+            res = pool_migrator.pool_migrator.recommend_destinations(src_drive, selected)
+            self._send_json(200, res)
+
+        elif path == "/api/migrator/start":
+            src_drive = body.get("source_drive", "R")
+            target_drive = body.get("target_drive", "")
+            item_paths = body.get("item_paths", [])
+            use_bin = body.get("use_recycle_bin", True)
+            res = pool_migrator.pool_migrator.start_batch_migration(src_drive, target_drive, item_paths, use_bin)
+            self._send_json(200, res)
+
+        elif path == "/api/migrator/cancel":
+            pool_migrator.pool_migrator.cancel_migration()
+            self._send_json(200, {"status": "ok", "message": "Migration cancel requested"})
 
         else:
             self._send_json(404, {"status": "not_found"})

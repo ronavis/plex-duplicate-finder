@@ -143,6 +143,37 @@ const btnModalInspectClose = document.getElementById('btn-modal-inspect-close');
 const btnModalInspectCloseFooter = document.getElementById('btn-modal-inspect-close-footer');
 const inspectContentBox = document.getElementById('inspect-content-box');
 
+// Smart Drive Offloader Modal
+const modalMigrator = document.getElementById('modal-migrator');
+const btnOpenMigratorModal = document.getElementById('btn-open-migrator-modal');
+const btnModalMigratorClose = document.getElementById('btn-modal-migrator-close');
+const btnMigratorClose = document.getElementById('btn-migrator-close');
+const selectMigratorSource = document.getElementById('select-migrator-source');
+const inputMigratorSearch = document.getElementById('input-migrator-search');
+const checkMigratorSelectAll = document.getElementById('check-migrator-select-all');
+const migratorItemsTbody = document.getElementById('migrator-items-tbody');
+const selectMigratorDest = document.getElementById('select-migrator-dest');
+const migratorRecommendedBadge = document.getElementById('migrator-recommended-badge');
+const impactSrcLetter = document.getElementById('impact-src-letter');
+const impactSrcBar = document.getElementById('impact-src-bar');
+const impactSrcDetails = document.getElementById('impact-src-details');
+const impactDstLetter = document.getElementById('impact-dst-letter');
+const impactDstBar = document.getElementById('impact-dst-bar');
+const impactDstDetails = document.getElementById('impact-dst-details');
+const checkMigratorRecycleBin = document.getElementById('check-migrator-recycle-bin');
+const migratorSummaryCount = document.getElementById('migrator-summary-count');
+const migratorSummarySize = document.getElementById('migrator-summary-size');
+const btnMigratorStart = document.getElementById('btn-migrator-start');
+const btnMigratorClearSelection = document.getElementById('btn-migrator-clear-selection');
+const migratorProgressOverlay = document.getElementById('migrator-progress-overlay');
+const migratorProgItem = document.getElementById('migrator-prog-item');
+const migratorProgSpeed = document.getElementById('migrator-prog-speed');
+const migratorProgFile = document.getElementById('migrator-prog-file');
+const migratorProgBar = document.getElementById('migrator-prog-bar');
+const migratorProgBytes = document.getElementById('migrator-prog-bytes');
+const migratorProgEta = document.getElementById('migrator-prog-eta');
+const btnMigratorCancel = document.getElementById('btn-migrator-cancel');
+
 // Init
 document.addEventListener('DOMContentLoaded', () => {
   loadDrives();
@@ -329,6 +360,34 @@ function setupEventListeners() {
   // Feature 3: Inspect Modal Setup
   if (btnModalInspectClose) btnModalInspectClose.addEventListener('click', () => modalInspect.classList.add('hidden'));
   if (btnModalInspectCloseFooter) btnModalInspectCloseFooter.addEventListener('click', () => modalInspect.classList.add('hidden'));
+
+  // Smart Drive Offloader Setup
+  if (btnOpenMigratorModal) btnOpenMigratorModal.addEventListener('click', openMigratorModal);
+  if (btnModalMigratorClose) btnModalMigratorClose.addEventListener('click', closeMigratorModal);
+  if (btnMigratorClose) btnMigratorClose.addEventListener('click', closeMigratorModal);
+  if (selectMigratorSource) selectMigratorSource.addEventListener('change', loadMigratorDriveContent);
+  if (selectMigratorDest) selectMigratorDest.addEventListener('change', updateMigratorRecommendation);
+  if (inputMigratorSearch) inputMigratorSearch.addEventListener('input', renderMigratorTable);
+  if (checkMigratorSelectAll) checkMigratorSelectAll.addEventListener('change', toggleMigratorSelectAll);
+  if (btnMigratorClearSelection) btnMigratorClearSelection.addEventListener('click', clearMigratorSelection);
+  if (btnMigratorStart) btnMigratorStart.addEventListener('click', startMigratorExecution);
+  if (btnMigratorCancel) btnMigratorCancel.addEventListener('click', cancelMigratorExecution);
+
+  document.querySelectorAll('[data-migrator-cat]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      document.querySelectorAll('[data-migrator-cat]').forEach(b => b.classList.remove('active'));
+      e.target.classList.add('active');
+      currentMigratorCat = e.target.getAttribute('data-migrator-cat');
+      loadMigratorDriveContent();
+    });
+  });
+
+  document.querySelectorAll('.btn-quick-target').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const targetGb = parseFloat(e.target.getAttribute('data-target-gb'));
+      smartSelectMigratorTarget(targetGb);
+    });
+  });
 }
 
 // Drives Management
@@ -1718,3 +1777,333 @@ function showToast(message) {
     setTimeout(() => toast.remove(), 300);
   }, 4000);
 }
+
+// ==========================================================================
+// SMART DRIVE OFFLOADER & POOL BALANCER (NON-DUPLICATE MIGRATION)
+// ==========================================================================
+
+let migratorContentItems = [];
+let selectedMigratorItemPaths = new Set();
+let currentMigratorCat = 'all';
+let migratorPollTimer = null;
+
+async function openMigratorModal() {
+  modalMigrator.classList.remove('hidden');
+  
+  // Populate source drive dropdown (default to R: if available)
+  if (selectMigratorSource) {
+    selectMigratorSource.innerHTML = availableDrives
+      .filter(d => !['C', 'D'].includes(d.letter))
+      .map(d => {
+        const isR = d.letter.toUpperCase() === 'R';
+        return `<option value="${d.letter}" ${isR ? 'selected' : ''}>Drive ${d.letter}: (${d.label || 'Storage'}) — ${formatBytes(d.free_bytes)} Free</option>`;
+      }).join('');
+  }
+
+  // Check if a migration is already running
+  try {
+    const statusRes = await fetch('/api/migrator/status');
+    const statusData = await statusRes.json();
+    if (statusData.is_migrating) {
+      migratorProgressOverlay.classList.remove('hidden');
+      startMigratorPolling();
+      return;
+    } else {
+      migratorProgressOverlay.classList.add('hidden');
+    }
+  } catch (e) {}
+
+  loadMigratorDriveContent();
+}
+
+function closeMigratorModal() {
+  modalMigrator.classList.add('hidden');
+}
+
+async function loadMigratorDriveContent() {
+  if (!selectMigratorSource) return;
+  const drive = selectMigratorSource.value;
+  if (!drive) return;
+
+  selectedMigratorItemPaths.clear();
+  updateMigratorSelectionSummary();
+
+  migratorItemsTbody.innerHTML = `<tr><td colspan="5" class="table-loading" style="text-align: center; padding: 24px; color: var(--text-muted);">Scanning Drive ${drive}: for movies and TV series...</td></tr>`;
+
+  try {
+    const res = await fetch('/api/migrator/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ drive: drive, category: currentMigratorCat })
+    });
+    const data = await res.json();
+
+    if (data.status === 'ok') {
+      migratorContentItems = data.items || [];
+      renderMigratorTable();
+      updateMigratorRecommendation();
+    } else {
+      migratorItemsTbody.innerHTML = `<tr><td colspan="5" class="error-msg" style="text-align: center; padding: 20px; color: var(--rose);">Error: ${data.message}</td></tr>`;
+    }
+  } catch (err) {
+    migratorItemsTbody.innerHTML = `<tr><td colspan="5" class="error-msg" style="text-align: center; padding: 20px; color: var(--rose);">Failed to scan: ${err.message}</td></tr>`;
+  }
+}
+
+function renderMigratorTable() {
+  const query = (inputMigratorSearch ? inputMigratorSearch.value.trim().toLowerCase() : '');
+  const filtered = migratorContentItems.filter(item => !query || item.name.toLowerCase().includes(query));
+
+  if (filtered.length === 0) {
+    migratorItemsTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 24px; color: var(--text-muted);">No movies or TV series found matching filter.</td></tr>`;
+    return;
+  }
+
+  migratorItemsTbody.innerHTML = filtered.map(item => {
+    const isChecked = selectedMigratorItemPaths.has(item.path);
+    const typeBadge = item.type === 'tv'
+      ? `<span class="badge badge-accent">TV Show</span>`
+      : `<span class="badge badge-res-1080">Movie</span>`;
+
+    return `
+      <tr class="${isChecked ? 'row-selected' : ''}" onclick="toggleMigratorItemRow('${encodeURIComponent(item.path)}', event)">
+        <td style="text-align: center;" onclick="event.stopPropagation();">
+          <input type="checkbox" class="migrator-item-chk" data-path="${encodeURIComponent(item.path)}" ${isChecked ? 'checked' : ''} onchange="toggleMigratorItemCheck('${encodeURIComponent(item.path)}')">
+        </td>
+        <td>
+          <strong style="color: var(--text-primary); font-size: 0.92rem;">${escapeHtml(item.name)}</strong>
+        </td>
+        <td>${typeBadge}</td>
+        <td style="text-align: center; color: var(--text-muted);">${item.file_count}</td>
+        <td style="text-align: right; font-weight: 700; color: var(--plex-gold); font-family: monospace;">${item.size_human}</td>
+      </tr>
+    `;
+  }).join('');
+
+  if (checkMigratorSelectAll) {
+    checkMigratorSelectAll.checked = filtered.length > 0 && filtered.every(it => selectedMigratorItemPaths.has(it.path));
+  }
+}
+
+function toggleMigratorItemRow(encodedPath, e) {
+  if (e.target.tagName.toLowerCase() === 'input') return;
+  toggleMigratorItemCheck(encodedPath);
+}
+
+function toggleMigratorItemCheck(encodedPath) {
+  const path = decodeURIComponent(encodedPath);
+  if (selectedMigratorItemPaths.has(path)) {
+    selectedMigratorItemPaths.delete(path);
+  } else {
+    selectedMigratorItemPaths.add(path);
+  }
+  updateMigratorSelectionSummary();
+  renderMigratorTable();
+  updateMigratorRecommendation();
+}
+
+function toggleMigratorSelectAll() {
+  const isChecked = checkMigratorSelectAll.checked;
+  const query = (inputMigratorSearch ? inputMigratorSearch.value.trim().toLowerCase() : '');
+  const filtered = migratorContentItems.filter(item => !query || item.name.toLowerCase().includes(query));
+
+  filtered.forEach(it => {
+    if (isChecked) selectedMigratorItemPaths.add(it.path);
+    else selectedMigratorItemPaths.delete(it.path);
+  });
+
+  updateMigratorSelectionSummary();
+  renderMigratorTable();
+  updateMigratorRecommendation();
+}
+
+function clearMigratorSelection() {
+  selectedMigratorItemPaths.clear();
+  updateMigratorSelectionSummary();
+  renderMigratorTable();
+  updateMigratorRecommendation();
+}
+
+function smartSelectMigratorTarget(targetGb) {
+  const targetBytes = targetGb * 1024 * 1024 * 1024;
+  selectedMigratorItemPaths.clear();
+  let accumulated = 0;
+
+  for (const item of migratorContentItems) {
+    if (accumulated >= targetBytes) break;
+    selectedMigratorItemPaths.add(item.path);
+    accumulated += item.size_bytes;
+  }
+
+  updateMigratorSelectionSummary();
+  renderMigratorTable();
+  updateMigratorRecommendation();
+  showToast(`Auto-selected ${selectedMigratorItemPaths.size} items to free ~${formatBytes(accumulated)}!`);
+}
+
+function updateMigratorSelectionSummary() {
+  const count = selectedMigratorItemPaths.size;
+  let totalBytes = 0;
+  for (const item of migratorContentItems) {
+    if (selectedMigratorItemPaths.has(item.path)) {
+      totalBytes += item.size_bytes;
+    }
+  }
+
+  if (migratorSummaryCount) migratorSummaryCount.textContent = count;
+  if (migratorSummarySize) migratorSummarySize.textContent = formatBytes(totalBytes);
+  if (btnMigratorStart) btnMigratorStart.disabled = (count === 0);
+}
+
+async function updateMigratorRecommendation() {
+  const src = selectMigratorSource ? selectMigratorSource.value : 'R';
+  const selectedList = migratorContentItems.filter(it => selectedMigratorItemPaths.has(it.path));
+
+  try {
+    const res = await fetch('/api/migrator/recommend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_drive: src, selected_items: selectedList })
+    });
+    const data = await res.json();
+
+    if (data.status === 'ok') {
+      // Populate target drive select
+      const prevDest = selectMigratorDest.value;
+      selectMigratorDest.innerHTML = data.candidates.map(c => {
+        const isRec = (c.letter === data.recommended_drive);
+        const tag = isRec ? ' — Recommended' : '';
+        const fitWarning = c.can_fit ? `(${c.free_human} Free)` : `(Insufficient Free Space)`;
+        return `<option value="${c.letter}" ${isRec ? 'selected' : ''} ${!c.can_fit ? 'disabled' : ''}>Drive ${c.letter}: ${c.label} ${fitWarning}${tag}</option>`;
+      }).join('');
+
+      if (prevDest && selectMigratorDest.querySelector(`option[value="${prevDest}"]:not(:disabled)`)) {
+        selectMigratorDest.value = prevDest;
+      }
+
+      const activeDest = selectMigratorDest.value;
+      const destCandidate = data.candidates.find(c => c.letter === activeDest) || data.candidates[0];
+
+      // Update impact gauges
+      if (impactSrcLetter) impactSrcLetter.textContent = `${src}:`;
+      if (data.source_preview) {
+        if (impactSrcBar) impactSrcBar.style.width = `${data.source_preview.projected_used_percent}%`;
+        if (impactSrcDetails) {
+          impactSrcDetails.textContent = `${data.source_preview.current_used_percent}% → ${data.source_preview.projected_used_percent}% (Frees ${data.source_preview.freed_human})`;
+        }
+      }
+
+      if (destCandidate) {
+        if (impactDstLetter) impactDstLetter.textContent = `${destCandidate.letter}:`;
+        if (impactDstBar) impactDstBar.style.width = `${destCandidate.projected_used_percent}%`;
+        if (impactDstDetails) {
+          impactDstDetails.textContent = `${destCandidate.used_percent}% → ${destCandidate.projected_used_percent}% (${destCandidate.projected_free_human} remaining)`;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Recommendation update error:', e);
+  }
+}
+
+async function startMigratorExecution() {
+  const src = selectMigratorSource.value;
+  const dest = selectMigratorDest.value;
+  const paths = Array.from(selectedMigratorItemPaths);
+  const useBin = checkMigratorRecycleBin ? checkMigratorRecycleBin.checked : true;
+
+  if (!dest) {
+    alert('Please select an eligible destination drive.');
+    return;
+  }
+  if (paths.length === 0) {
+    alert('Please select at least one show or movie to migrate.');
+    return;
+  }
+
+  const confirmMsg = `Are you sure you want to migrate ${paths.length} item(s) from Drive ${src}: to Drive ${dest}:?\n\nFiles will be safely copied and byte-verified before source removal.`;
+  if (!confirm(confirmMsg)) return;
+
+  btnMigratorStart.disabled = true;
+
+  try {
+    const res = await fetch('/api/migrator/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_drive: src,
+        target_drive: dest,
+        item_paths: paths,
+        use_recycle_bin: useBin
+      })
+    });
+    const data = await res.json();
+
+    if (data.status === 'ok') {
+      migratorProgressOverlay.classList.remove('hidden');
+      startMigratorPolling();
+    } else {
+      alert('Failed to start migration: ' + data.message);
+      btnMigratorStart.disabled = false;
+    }
+  } catch (err) {
+    alert('Error starting migration: ' + err.message);
+    btnMigratorStart.disabled = false;
+  }
+}
+
+function startMigratorPolling() {
+  if (migratorPollTimer) clearInterval(migratorPollTimer);
+  migratorPollTimer = setInterval(pollMigratorStatus, 800);
+}
+
+async function pollMigratorStatus() {
+  try {
+    const res = await fetch('/api/migrator/status');
+    const data = await res.json();
+
+    if (data.is_migrating) {
+      if (migratorProgItem) migratorProgItem.textContent = data.current_item_name || 'Moving media files...';
+      if (migratorProgSpeed) migratorProgSpeed.textContent = `${data.speed_mbps} MB/s`;
+      if (migratorProgFile) migratorProgFile.textContent = data.current_file_name || 'Transferring chunks...';
+      if (migratorProgBar) migratorProgBar.style.width = `${data.progress_pct}%`;
+      if (migratorProgBytes) migratorProgBytes.textContent = `${formatBytes(data.transferred_batch_bytes)} / ${formatBytes(data.total_batch_bytes)} (${data.progress_pct}%)`;
+      if (migratorProgEta) {
+        const m = Math.floor(data.eta_seconds / 60);
+        const s = data.eta_seconds % 60;
+        migratorProgEta.textContent = `ETA: ~${m}m ${s}s`;
+      }
+    } else {
+      // Completed or cancelled
+      clearInterval(migratorPollTimer);
+      migratorPollTimer = null;
+      migratorProgressOverlay.classList.add('hidden');
+      btnMigratorStart.disabled = false;
+
+      if (data.status_message && data.status_message.includes('completed')) {
+        showToast('Migration completed successfully!');
+        loadDrives(); // Refresh drive capacity bars
+        loadMigratorDriveContent(); // Reload drive items
+      } else if (data.status_message && data.status_message.includes('cancelled')) {
+        showToast('Migration was cancelled.');
+        loadMigratorDriveContent();
+      } else if (data.errors && data.errors.length > 0) {
+        alert('Migration encountered errors:\n' + data.errors.join('\n'));
+      }
+    }
+  } catch (e) {
+    console.warn('Migrator status polling error:', e);
+  }
+}
+
+async function cancelMigratorExecution() {
+  if (!confirm('Are you sure you want to cancel the active migration? Any currently in-progress file copy will be discarded cleanly.')) return;
+  try {
+    await fetch('/api/migrator/cancel', { method: 'POST' });
+    btnMigratorCancel.textContent = 'Cancelling...';
+    btnMigratorCancel.disabled = true;
+  } catch (e) {
+    alert('Error cancelling migration: ' + e.message);
+  }
+}
+
