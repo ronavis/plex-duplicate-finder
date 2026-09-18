@@ -27,6 +27,11 @@
         </div>
       </div>
       <div class="header-actions">
+        <div id="stat-pool" class="stat-pill">
+          <span class="stat-label">Plex Storage Pool</span>
+          <span id="header-pool-val" class="stat-val">0.0% Full</span>
+          <span id="header-pool-sub" class="stat-sub">0.00 TB Free</span>
+        </div>
         <div id="stat-reclaimable" class="stat-pill">
           <span class="stat-label">Reclaimable Space</span>
           <span id="total-reclaimable-val" class="stat-val">0.00 GB</span>
@@ -56,6 +61,31 @@
             <button id="btn-select-plex" class="btn btn-secondary btn-sm">Select All PLEX Drives</button>
             <button id="btn-select-all" class="btn btn-secondary btn-sm">Select All</button>
             <button id="btn-deselect-all" class="btn btn-ghost btn-sm">Clear</button>
+          </div>
+        </div>
+
+        <!-- Total Selected Storage Pool Overview Bar -->
+        <div class="storage-pool-banner" id="storage-pool-banner">
+          <div class="pool-header">
+            <div class="pool-title-group">
+              <span class="pool-badge" id="pool-drives-count">0 Drives Selected</span>
+              <span class="pool-main-label">Total Storage Pool:</span>
+              <span class="pool-stat-highlight" id="pool-total-capacity">0.00 TB</span>
+            </div>
+            <div class="pool-stats-summary">
+              <span class="pool-stat-item">
+                <span class="dot dot-used"></span>
+                Used: <strong id="pool-used-space">0.00 TB</strong> (<span id="pool-used-pct">0.0%</span>)
+              </span>
+              <span class="pool-stat-divider">•</span>
+              <span class="pool-stat-item">
+                <span class="dot dot-free"></span>
+                Free: <strong id="pool-free-space" class="text-emerald">0.00 TB</strong>
+              </span>
+            </div>
+          </div>
+          <div class="pool-meter-container">
+            <div id="pool-meter-fill" class="pool-meter-fill" style="width: 0%;"></div>
           </div>
         </div>
 

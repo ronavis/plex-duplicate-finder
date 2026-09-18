@@ -172,6 +172,13 @@ body {
   color: var(--plex-gold);
 }
 
+.stat-sub {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin-top: 2px;
+}
+
 /* Sections */
 .section-card {
   background: var(--bg-card);
@@ -284,6 +291,132 @@ body {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none !important;
+}
+
+/* Storage Pool Banner */
+.storage-pool-banner {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(8px);
+}
+
+.pool-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.pool-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pool-badge {
+  background: rgba(229, 160, 13, 0.15);
+  color: var(--plex-gold);
+  border: 1px solid rgba(229, 160, 13, 0.35);
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.pool-main-label {
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.pool-stat-highlight {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+
+.pool-stats-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
+.pool-stat-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pool-stat-item strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.pool-stat-divider {
+  color: var(--text-muted);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-used {
+  background: var(--plex-gold);
+  box-shadow: 0 0 6px rgba(229, 160, 13, 0.6);
+}
+
+.dot-free {
+  background: var(--emerald);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+
+.text-emerald {
+  color: var(--emerald) !important;
+}
+
+.pool-meter-container {
+  height: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+.pool-meter-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pool-meter-fill.healthy {
+  background: linear-gradient(90deg, #10b981, #059669);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+}
+
+.pool-meter-fill.warning {
+  background: linear-gradient(90deg, var(--plex-gold), #d97706);
+  box-shadow: 0 0 10px rgba(229, 160, 13, 0.4);
+}
+
+.pool-meter-fill.danger {
+  background: linear-gradient(90deg, #f59e0b, var(--rose));
+  box-shadow: 0 0 10px rgba(244, 63, 94, 0.4);
 }
 
 /* Drives Grid */

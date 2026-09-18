@@ -207,6 +207,8 @@ function saveSelectedDrives() {
 }
 
 function renderDrives() {
+  updateStoragePoolTotals();
+
   if (!availableDrives.length) {
     drivesGrid.innerHTML = '<div class="empty-state">No drives detected.</div>';
     return;
@@ -241,6 +243,64 @@ function renderDrives() {
       </div>
     `;
   }).join('');
+}
+
+function updateStoragePoolTotals() {
+  let totalBytes = 0;
+  let usedBytes = 0;
+  let freeBytes = 0;
+  let selectedCount = 0;
+
+  availableDrives.forEach(d => {
+    if (selectedDriveRoots.has(d.root)) {
+      totalBytes += (d.total_bytes || 0);
+      usedBytes += (d.used_bytes || 0);
+      freeBytes += (d.free_bytes || 0);
+      selectedCount++;
+    }
+  });
+
+  const usedPercent = totalBytes > 0 ? (usedBytes / totalBytes) * 100 : 0;
+  const usedPercentFixed = usedPercent.toFixed(1);
+
+  // Update Section Pool Banner elements
+  const poolDrivesCountEl = document.getElementById('pool-drives-count');
+  const poolTotalCapacityEl = document.getElementById('pool-total-capacity');
+  const poolUsedSpaceEl = document.getElementById('pool-used-space');
+  const poolUsedPctEl = document.getElementById('pool-used-pct');
+  const poolFreeSpaceEl = document.getElementById('pool-free-space');
+  const poolMeterFillEl = document.getElementById('pool-meter-fill');
+
+  // Update Top Header Pill elements
+  const headerPoolValEl = document.getElementById('header-pool-val');
+  const headerPoolSubEl = document.getElementById('header-pool-sub');
+
+  if (poolDrivesCountEl) {
+    poolDrivesCountEl.textContent = `${selectedCount} Drive${selectedCount === 1 ? '' : 's'} Selected`;
+  }
+  if (poolTotalCapacityEl) {
+    poolTotalCapacityEl.textContent = formatBytes(totalBytes);
+  }
+  if (poolUsedSpaceEl) {
+    poolUsedSpaceEl.textContent = formatBytes(usedBytes);
+  }
+  if (poolUsedPctEl) {
+    poolUsedPctEl.textContent = `${usedPercentFixed}%`;
+  }
+  if (poolFreeSpaceEl) {
+    poolFreeSpaceEl.textContent = formatBytes(freeBytes);
+  }
+  if (poolMeterFillEl) {
+    poolMeterFillEl.style.width = `${Math.min(100, usedPercent)}%`;
+    poolMeterFillEl.className = 'pool-meter-fill ' + (usedPercent > 90 ? 'danger' : usedPercent > 75 ? 'warning' : 'healthy');
+  }
+
+  if (headerPoolValEl) {
+    headerPoolValEl.textContent = `${usedPercentFixed}% Full`;
+  }
+  if (headerPoolSubEl) {
+    headerPoolSubEl.textContent = `${formatBytes(freeBytes)} Free / ${formatBytes(totalBytes)}`;
+  }
 }
 
 window.toggleDriveByLetter = function(letter) {
