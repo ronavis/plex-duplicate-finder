@@ -52,7 +52,36 @@ const modalFileList = document.getElementById('modal-file-list');
 document.addEventListener('DOMContentLoaded', () => {
   loadDrives();
   setupEventListeners();
+  initScanState();
 });
+
+// Restore cached scan results or resume active scan on page load
+async function initScanState() {
+  try {
+    const res = await fetch('/api/scan/status');
+    const data = await res.json();
+    if (data.status === 'ok') {
+      // If a scan was already running when user opened page, resume tracking
+      if (data.is_scanning) {
+        btnStartScan.classList.add('hidden');
+        btnCancelScan.classList.remove('hidden');
+        scanProgressBanner.classList.remove('hidden');
+
+        if (scanPollInterval) clearInterval(scanPollInterval);
+        scanPollInterval = setInterval(pollScanStatus, 800);
+      }
+
+      // If cached duplicate results exist, immediately restore and display them!
+      if (data.duplicate_groups && data.duplicate_groups.length > 0) {
+        duplicateGroups = data.duplicate_groups;
+        updateStats();
+        renderDuplicateGroups();
+      }
+    }
+  } catch (err) {
+    console.error('Failed to initialize scan state:', err);
+  }
+}
 
 function setupEventListeners() {
   // Event delegation for drive cards to prevent inline JS backslash escaping issues
@@ -290,6 +319,13 @@ async function pollScanStatus() {
       } else {
         progDriveInfo.textContent = '';
       }
+    }
+
+    // Real-time duplicate streaming: render duplicate candidates as soon as they are discovered!
+    if (data.duplicate_groups && data.duplicate_groups.length !== duplicateGroups.length) {
+      duplicateGroups = data.duplicate_groups;
+      updateStats();
+      renderDuplicateGroups();
     }
 
     if (!data.is_scanning) {

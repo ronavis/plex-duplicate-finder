@@ -270,6 +270,13 @@ class MediaScanner:
         all_media_items: List[Dict[str, Any]] = []
         num_targets = max(1, len(target_paths))
 
+        # Real-time duplicate tracking indexes
+        size_buckets: Dict[int, List[Dict[str, Any]]] = {}
+        title_buckets: Dict[str, List[Dict[str, Any]]] = {}
+        exact_groups: Dict[str, Dict[str, Any]] = {}
+        quality_groups: Dict[str, Dict[str, Any]] = {}
+        last_ui_update_time = time.time()
+
         try:
             for idx, root_target in enumerate(target_paths):
                 if self.cancel_requested:
@@ -281,10 +288,8 @@ class MediaScanner:
                 self.current_drive_letter = root_target
                 self.current_phase = f"Scanning drive {idx + 1} of {num_targets}: {root_target}"
 
-                # Base percentage for current drive within 0% - 75% discovery phase
-                base_pct = (idx / num_targets) * 75.0
-                next_base_pct = ((idx + 1) / num_targets) * 75.0
-
+                base_pct = (idx / num_targets) * 80.0
+                next_base_pct = ((idx + 1) / num_targets) * 80.0
                 files_in_current_drive = 0
 
                 for dirpath, dirnames, filenames in os.walk(root_target):
@@ -302,7 +307,7 @@ class MediaScanner:
                         self.total_files_scanned += 1
                         files_in_current_drive += 1
 
-                        # Smoothly estimate intra-drive progress (asymptote towards next_base_pct)
+                        # Smooth progress estimation
                         ratio = 1.0 - (1.0 / (1.0 + (files_in_current_drive / 15000.0)))
                         self.progress_pct = round(base_pct + ratio * (next_base_pct - base_pct), 1)
 
@@ -315,13 +320,78 @@ class MediaScanner:
                                     meta = parse_media_metadata(full_path, sz)
                                     all_media_items.append(meta)
                                     self.total_media_files += 1
+
+                                    # 1. Live Exact Size Matching
+                                    size_buckets.setdefault(sz, []).append(meta)
+                                    matched_size = size_buckets[sz]
+                                    if len(matched_size) > 1:
+                                        for item in matched_size:
+                                            if not item.get("sparse_hash"):
+                                                item["sparse_hash"] = compute_sparse_hash(item["path"])
+                                        h_map: Dict[str, List[Dict[str, Any]]] = {}
+                                        for item in matched_size:
+                                            h = item["sparse_hash"]
+                                            if h and not h.startswith("err_"):
+                                                h_map.setdefault(h, []).append(item)
+                                        for h, group_items in h_map.items():
+                                            if len(group_items) > 1:
+                                                gid = f"exact_{h[:8]}"
+                                                reclaimable = sum(x["size_bytes"] for x in group_items[1:])
+                                                exact_groups[gid] = {
+                                                    "id": gid,
+                                                    "type": "exact_match",
+                                                    "title": group_items[0]["title"].title() or group_items[0]["filename"],
+                                                    "match_reason": f"Exact Match ({group_items[0]['size_human']})",
+                                                    "reclaimable_bytes": reclaimable,
+                                                    "reclaimable_human": format_bytes(reclaimable),
+                                                    "items": group_items,
+                                                }
+
+                                    # 2. Live Title / Quality Matching
+                                    key = None
+                                    if meta["is_tv"] and meta["season"] is not None and meta["episode"] is not None:
+                                        key = f"tv_{meta['title']}_s{meta['season']:02d}e{meta['episode']:02d}"
+                                    elif meta["year"]:
+                                        key = f"movie_{meta['title']}_{meta['year']}"
+                                    elif len(meta["title"]) > 3:
+                                        key = f"title_{meta['title']}"
+
+                                    if key:
+                                        title_buckets.setdefault(key, []).append(meta)
+                                        t_items = title_buckets[key]
+                                        if len(t_items) > 1:
+                                            sorted_t = sorted(t_items, key=lambda x: x["size_bytes"], reverse=True)
+                                            reclaimable = sum(x["size_bytes"] for x in sorted_t[1:])
+                                            quality_groups[key] = {
+                                                "id": f"quality_{key}",
+                                                "type": "quality_variation",
+                                                "title": sorted_t[0]["title"].title(),
+                                                "match_reason": f"Quality Variation ({len(sorted_t)} versions found)",
+                                                "reclaimable_bytes": reclaimable,
+                                                "reclaimable_human": format_bytes(reclaimable),
+                                                "items": sorted_t,
+                                            }
+
+                                    # Throttle live UI duplicate list updates (every 0.5 sec)
+                                    now = time.time()
+                                    if now - last_ui_update_time > 0.5:
+                                        # Filter quality groups so we don't duplicate exact matches
+                                        exact_paths = {p for g in exact_groups.values() for p in (x["path"] for x in g["items"])}
+                                        filtered_q = []
+                                        for qg in quality_groups.values():
+                                            non_exact_items = [it for it in qg["items"] if it["path"] not in exact_paths]
+                                            if len(non_exact_items) > 1:
+                                                filtered_q.append(qg)
+                                        self.duplicates = list(exact_groups.values()) + filtered_q
+                                        last_ui_update_time = now
+
                             except (OSError, PermissionError):
                                 pass
 
-            # Group duplicates (75% -> 100%)
+            # Finalize grouping (80% -> 100%)
             if not self.cancel_requested:
-                self.progress_pct = 75.0
-                self.current_phase = "Grouping candidates and computing sparse hashes..."
+                self.progress_pct = 95.0
+                self.current_phase = "Finalizing duplicate groups..."
                 self.duplicates = self._group_duplicates(all_media_items)
 
         finally:
