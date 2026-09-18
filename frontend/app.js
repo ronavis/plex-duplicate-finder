@@ -381,11 +381,6 @@ function updateStats() {
 }
 
 // Render Results
-function renderDuplicateGroups() {
-  const filtered = duplicateGroups.filter(g => {
-    if (currentFilter === 'all') return true;
-    return g.type === currentFilter;
-// Render Results
 window.mediaItemsByPath = new Map();
 
 function renderDuplicateGroups() {
