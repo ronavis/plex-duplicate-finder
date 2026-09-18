@@ -150,11 +150,15 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
 
 
 def run_server():
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
     server_address = ("127.0.0.1", PORT)
     httpd = ThreadingHTTPServer(server_address, PlexDedupHandler)
     print("=" * 60)
-    print(f"🎬 Plex Duplicate Finder is running!")
-    print(f"👉 Localhost Web UI: http://localhost:{PORT}")
+    print("Plex Duplicate Finder is running!")
+    print(f"Localhost Web UI: http://localhost:{PORT}")
     print("=" * 60)
     try:
         httpd.serve_forever()
