@@ -495,7 +495,8 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
                 self._send_json(400, {"status": "error", "message": "File does not exist."})
                 return
             try:
-                subprocess.Popen(["explorer.exe", f"/select,{target_path}"])
+                norm_p = os.path.normpath(target_path)
+                subprocess.Popen(["explorer.exe", f"/select,{norm_p}"])
                 self._send_json(200, {"status": "ok"})
             except Exception as e:
                 self._send_json(500, {"status": "error", "message": str(e)})

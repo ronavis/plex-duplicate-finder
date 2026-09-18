@@ -762,11 +762,11 @@ function renderDuplicateGroups() {
           </div>
           <div class="file-date">${formatDate(item.modified_time)}</div>
           <div class="file-size">${item.size_human}</div>
-          <div class="file-actions-cell" onclick="event.stopPropagation();">
-            <button type="button" class="btn-row-action btn-open-folder" data-encoded-path="${encodedPath}" title="Reveal in Windows File Explorer">📁</button>
-            <button type="button" class="btn-row-action btn-preview-video" data-encoded-path="${encodedPath}" title="Preview in Media Player">▶</button>
-            <button type="button" class="btn-row-action btn-inspect-streams" data-encoded-path="${encodedPath}" title="Inspect Audio/Video/HDR Streams">🔍</button>
-            <button type="button" class="btn-row-action btn-balancer-move" data-encoded-path="${encodedPath}" title="Migrate file to another drive">⇄</button>
+          <div class="file-actions-cell">
+            <button type="button" class="btn-row-action btn-open-folder" data-encoded-path="${encodedPath}" title="Reveal in Windows File Explorer" onclick="event.stopPropagation(); window.openInWindowsExplorer(decodeURIComponent('${encodedPath}'));">📁</button>
+            <button type="button" class="btn-row-action btn-preview-video" data-encoded-path="${encodedPath}" title="Preview in Media Player" onclick="event.stopPropagation(); window.openVideoPreview(decodeURIComponent('${encodedPath}'));">▶</button>
+            <button type="button" class="btn-row-action btn-inspect-streams" data-encoded-path="${encodedPath}" title="Inspect Audio/Video/HDR Streams" onclick="event.stopPropagation(); window.openStreamInspector(decodeURIComponent('${encodedPath}'));">🔍</button>
+            <button type="button" class="btn-row-action btn-balancer-move" data-encoded-path="${encodedPath}" title="Migrate file to another drive" onclick="event.stopPropagation(); window.openBalancerModal(decodeURIComponent('${encodedPath}'));">⇄</button>
           </div>
         </div>
       `;
@@ -887,6 +887,11 @@ function handleDuplicateListClick(e) {
     e.stopPropagation();
     const groupCard = groupBtn.closest('.duplicate-group-card');
     if (groupCard) toggleGroupSelection(groupCard);
+    return;
+  }
+
+  // If clicked inside the actions cell (e.g. gaps/margins between buttons), ignore so row isn't selected
+  if (e.target.closest('.file-actions-cell')) {
     return;
   }
 
@@ -1139,6 +1144,7 @@ async function openInWindowsExplorer(filePath) {
     alert('Failed to launch Explorer: ' + err.message);
   }
 }
+window.openInWindowsExplorer = openInWindowsExplorer;
 
 function openVideoPreview(filePath) {
   const item = window.mediaItemsByPath?.get(filePath);
@@ -1218,6 +1224,8 @@ async function openStreamInspector(filePath) {
     inspectContentBox.innerHTML = `<div class="error-msg">Failed to inspect streams: ${err.message}</div>`;
   }
 }
+window.openStreamInspector = openStreamInspector;
+window.openVideoPreview = openVideoPreview;
 
 // ==========================================
 // FEATURE 4: Drive Storage Balancer ("Move to Drive")
@@ -1245,6 +1253,7 @@ function openBalancerModal(filePath) {
   selectBalancerTargetDrive.innerHTML = options.join('');
   modalBalancer.classList.remove('hidden');
 }
+window.openBalancerModal = openBalancerModal;
 
 function closeBalancerModal() {
   if (balancerPollInterval) {
