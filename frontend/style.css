@@ -260,6 +260,7 @@ body {
   transition: all var(--transition-fast);
   cursor: pointer;
   position: relative;
+  user-select: none;
 }
 
 .drive-card:hover {
@@ -270,31 +271,57 @@ body {
 
 .drive-card.selected {
   border-color: var(--plex-gold);
-  background: rgba(229, 160, 13, 0.06);
+  background: rgba(229, 160, 13, 0.08);
+  box-shadow: 0 0 16px rgba(229, 160, 13, 0.2);
 }
 
 .drive-card-top {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   margin-bottom: 12px;
 }
 
+.drive-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.drive-card-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--plex-gold);
+  cursor: pointer;
+}
+
+.drive-title-group {
+  display: flex;
+  flex-direction: column;
+}
+
 .drive-letter-badge {
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   font-weight: 700;
   color: var(--plex-gold);
 }
 
 .drive-label {
   font-size: 0.85rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
 }
 
 .drive-fs {
   font-size: 0.72rem;
   color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 .drive-capacity-bar {
@@ -378,34 +405,53 @@ body {
 /* Scan Progress Banner */
 .scan-progress-banner {
   margin-top: 20px;
-  padding: 16px;
+  padding: 18px 20px;
   background: rgba(229, 160, 13, 0.05);
-  border: 1px solid rgba(229, 160, 13, 0.2);
+  border: 1px solid rgba(229, 160, 13, 0.3);
   border-radius: var(--radius-md);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.progress-bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.progress-pct-badge {
+  font-family: 'Inter', monospace;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--plex-gold);
+  background: rgba(229, 160, 13, 0.12);
+  border: 1px solid rgba(229, 160, 13, 0.4);
+  padding: 4px 14px;
+  border-radius: 6px;
+  letter-spacing: -0.02em;
 }
 
 .progress-bar-container {
-  height: 8px;
+  height: 12px;
   background: rgba(255, 255, 255, 0.08);
-  border-radius: 4px;
+  border-radius: 6px;
   overflow: hidden;
   margin-bottom: 12px;
+  position: relative;
 }
 
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--plex-gold), #ffd166);
-  border-radius: 4px;
+  background: linear-gradient(90deg, var(--plex-gold), #ffc107);
+  border-radius: 6px;
+  transition: width 0.35s ease;
+  box-shadow: 0 0 12px rgba(229, 160, 13, 0.5);
 }
 
-.progress-indeterminate {
-  width: 40%;
-  animation: indeterminate 1.8s infinite ease-in-out;
-}
-
-@keyframes indeterminate {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(350%); }
+.progress-drive-indicator {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .progress-details {

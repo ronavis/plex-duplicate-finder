@@ -102,13 +102,21 @@
 
         <!-- Scan Progress Banner -->
         <div id="scan-progress-banner" class="scan-progress-banner hidden">
-          <div class="progress-bar-container">
-            <div id="scan-progress-bar" class="progress-bar-fill progress-indeterminate"></div>
-          </div>
-          <div class="progress-details">
+          <div class="progress-bar-header">
             <div class="progress-status-line">
               <span class="pulse-indicator"></span>
               <span id="scan-status-text">Scanning media drives...</span>
+            </div>
+            <span id="scan-progress-pct" class="progress-pct-badge">0.0%</span>
+          </div>
+
+          <div class="progress-bar-container">
+            <div id="scan-progress-bar" class="progress-bar-fill" style="width: 0%;"></div>
+          </div>
+
+          <div class="progress-details">
+            <div class="progress-drive-indicator">
+              <span id="prog-drive-info">Ready</span>
             </div>
             <div class="progress-stats">
               <span>Files scanned: <strong id="prog-scanned-count">0</strong></span>

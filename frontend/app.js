@@ -17,6 +17,8 @@ const btnStartScan = document.getElementById('btn-start-scan');
 const btnCancelScan = document.getElementById('btn-cancel-scan');
 const scanProgressBanner = document.getElementById('scan-progress-banner');
 const scanProgressBar = document.getElementById('scan-progress-bar');
+const scanProgressPct = document.getElementById('scan-progress-pct');
+const progDriveInfo = document.getElementById('prog-drive-info');
 const scanStatusText = document.getElementById('scan-status-text');
 const scanCurrentPath = document.getElementById('scan-current-path');
 const progScannedCount = document.getElementById('prog-scanned-count');
@@ -53,23 +55,38 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupEventListeners() {
+  // Event delegation for drive cards to prevent inline JS backslash escaping issues
+  drivesGrid.addEventListener('click', (e) => {
+    const card = e.target.closest('.drive-card');
+    if (!card) return;
+    const letter = card.getAttribute('data-letter');
+    if (letter) {
+      toggleDriveByLetter(letter);
+    }
+  });
+
   btnSelectPlex.addEventListener('click', () => {
     selectedDriveRoots.clear();
     availableDrives.forEach(d => {
-      if (d.is_plex_drive || d.label.toLowerCase().includes('plex')) {
+      const labelLower = (d.label || '').toLowerCase();
+      // Select drives containing 'plex', 'wd', or known Plex drive letters
+      if (d.is_plex_drive || labelLower.includes('plex') || labelLower.includes('wd') || d.letter === 'J') {
         selectedDriveRoots.add(d.root);
       }
     });
+    saveSelectedDrives();
     renderDrives();
   });
 
   btnSelectAll.addEventListener('click', () => {
     availableDrives.forEach(d => selectedDriveRoots.add(d.root));
+    saveSelectedDrives();
     renderDrives();
   });
 
   btnDeselectAll.addEventListener('click', () => {
     selectedDriveRoots.clear();
+    saveSelectedDrives();
     renderDrives();
   });
 
@@ -99,23 +116,60 @@ function setupEventListeners() {
   btnModalConfirm.addEventListener('click', executeSafeDeletion);
 }
 
-// Drives
+// Drives Management
 async function loadDrives() {
   try {
     const res = await fetch('/api/drives');
     const data = await res.json();
     if (data.status === 'ok') {
       availableDrives = data.drives;
-      // Default select Plex drives
-      availableDrives.forEach(d => {
-        if (d.is_plex_drive || d.label.toLowerCase().includes('plex')) {
-          selectedDriveRoots.add(d.root);
-        }
-      });
+
+      // Restore saved user drive selections if available
+      const savedLetters = getSavedSelectedLetters();
+      if (savedLetters && savedLetters.length > 0) {
+        selectedDriveRoots.clear();
+        availableDrives.forEach(d => {
+          if (savedLetters.includes(d.letter)) {
+            selectedDriveRoots.add(d.root);
+          }
+        });
+      } else {
+        // Default to all Plex drives including J:
+        selectedDriveRoots.clear();
+        availableDrives.forEach(d => {
+          const labelLower = (d.label || '').toLowerCase();
+          if (d.is_plex_drive || labelLower.includes('plex') || labelLower.includes('wd') || d.letter === 'J') {
+            selectedDriveRoots.add(d.root);
+          }
+        });
+      }
       renderDrives();
     }
   } catch (err) {
     drivesGrid.innerHTML = `<div class="error-msg">Failed to load drives: ${err.message}</div>`;
+  }
+}
+
+function getSavedSelectedLetters() {
+  try {
+    const raw = localStorage.getItem('plex_selected_drive_letters');
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveSelectedDrives() {
+  try {
+    const letters = [];
+    availableDrives.forEach(d => {
+      if (selectedDriveRoots.has(d.root)) {
+        letters.push(d.letter);
+      }
+    });
+    localStorage.setItem('plex_selected_drive_letters', JSON.stringify(letters));
+  } catch (e) {
+    console.error('Failed to save selected drives:', e);
   }
 }
 
@@ -133,11 +187,14 @@ function renderDrives() {
     const totalGb = (d.total_bytes / (1024 ** 3)).toFixed(1);
 
     return `
-      <div class="drive-card ${isSelected ? 'selected' : ''}" onclick="toggleDrive('${d.root}')">
+      <div class="drive-card ${isSelected ? 'selected' : ''}" data-letter="${d.letter}" title="Click to ${isSelected ? 'deselect' : 'select'} drive ${d.letter}:">
         <div class="drive-card-top">
-          <div>
-            <span class="drive-letter-badge">${d.letter}:</span>
-            <span class="drive-label">${d.label || 'Local Disk'}</span>
+          <div class="drive-card-header-left">
+            <input type="checkbox" class="drive-card-checkbox" ${isSelected ? 'checked' : ''} data-letter="${d.letter}" onclick="event.stopPropagation(); toggleDriveByLetter('${d.letter}')">
+            <div class="drive-title-group">
+              <span class="drive-letter-badge">${d.letter}:</span>
+              <span class="drive-label" title="${d.label || 'Local Disk'}">${d.label || 'Local Disk'}</span>
+            </div>
           </div>
           <span class="drive-fs">${d.filesystem}</span>
         </div>
@@ -153,12 +210,16 @@ function renderDrives() {
   }).join('');
 }
 
-window.toggleDrive = function(root) {
-  if (selectedDriveRoots.has(root)) {
-    selectedDriveRoots.delete(root);
+window.toggleDriveByLetter = function(letter) {
+  const drive = availableDrives.find(d => d.letter === letter);
+  if (!drive) return;
+
+  if (selectedDriveRoots.has(drive.root)) {
+    selectedDriveRoots.delete(drive.root);
   } else {
-    selectedDriveRoots.add(root);
+    selectedDriveRoots.add(drive.root);
   }
+  saveSelectedDrives();
   renderDrives();
 };
 
@@ -212,9 +273,31 @@ async function pollScanStatus() {
     progMediaCount.textContent = data.total_media_files.toLocaleString();
     scanCurrentPath.textContent = data.current_scanning_path || '';
 
+    // Update Percentage Bar & Badges
+    const pct = typeof data.progress_pct === 'number' ? Math.min(100.0, Math.max(0.0, data.progress_pct)) : 0.0;
+    scanProgressBar.style.width = `${pct}%`;
+    if (scanProgressPct) {
+      scanProgressPct.textContent = `${pct.toFixed(1)}%`;
+    }
+
+    if (data.current_phase) {
+      scanStatusText.textContent = data.current_phase;
+    }
+
+    if (progDriveInfo) {
+      if (data.total_drives > 0 && data.current_drive_index > 0) {
+        progDriveInfo.textContent = `Drive ${data.current_drive_index} of ${data.total_drives}`;
+      } else {
+        progDriveInfo.textContent = '';
+      }
+    }
+
     if (!data.is_scanning) {
       clearInterval(scanPollInterval);
       scanPollInterval = null;
+
+      scanProgressBar.style.width = '100%';
+      if (scanProgressPct) scanProgressPct.textContent = '100.0%';
 
       btnStartScan.classList.remove('hidden');
       btnCancelScan.classList.add('hidden');

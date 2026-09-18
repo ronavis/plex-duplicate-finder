@@ -241,6 +241,11 @@ class MediaScanner:
 
     def __init__(self):
         self.is_scanning = False
+        self.progress_pct = 0.0
+        self.current_phase = "Idle"
+        self.current_drive_index = 0
+        self.total_drives = 0
+        self.current_drive_letter = ""
         self.total_files_scanned = 0
         self.total_media_files = 0
         self.current_scanning_path = ""
@@ -252,20 +257,35 @@ class MediaScanner:
         """Execute scan across specified target paths or root drives."""
         self.is_scanning = True
         self.cancel_requested = False
+        self.progress_pct = 0.0
         self.total_files_scanned = 0
         self.total_media_files = 0
         self.duplicates = []
+        self.total_drives = len(target_paths)
+        self.current_drive_index = 0
+        self.current_phase = "Starting scan..."
         start_time = time.time()
         min_size_bytes = min_file_size_mb * 1024 * 1024
 
         all_media_items: List[Dict[str, Any]] = []
+        num_targets = max(1, len(target_paths))
 
         try:
-            for root_target in target_paths:
+            for idx, root_target in enumerate(target_paths):
                 if self.cancel_requested:
                     break
                 if not os.path.exists(root_target):
                     continue
+
+                self.current_drive_index = idx + 1
+                self.current_drive_letter = root_target
+                self.current_phase = f"Scanning drive {idx + 1} of {num_targets}: {root_target}"
+
+                # Base percentage for current drive within 0% - 75% discovery phase
+                base_pct = (idx / num_targets) * 75.0
+                next_base_pct = ((idx + 1) / num_targets) * 75.0
+
+                files_in_current_drive = 0
 
                 for dirpath, dirnames, filenames in os.walk(root_target):
                     if self.cancel_requested:
@@ -280,6 +300,12 @@ class MediaScanner:
 
                     for fname in filenames:
                         self.total_files_scanned += 1
+                        files_in_current_drive += 1
+
+                        # Smoothly estimate intra-drive progress (asymptote towards next_base_pct)
+                        ratio = 1.0 - (1.0 / (1.0 + (files_in_current_drive / 15000.0)))
+                        self.progress_pct = round(base_pct + ratio * (next_base_pct - base_pct), 1)
+
                         ext = os.path.splitext(fname)[1].lower()
                         if ext in MEDIA_EXTENSIONS:
                             full_path = os.path.join(dirpath, fname)
@@ -292,11 +318,16 @@ class MediaScanner:
                             except (OSError, PermissionError):
                                 pass
 
-            # Group duplicates
-            self.duplicates = self._group_duplicates(all_media_items)
+            # Group duplicates (75% -> 100%)
+            if not self.cancel_requested:
+                self.progress_pct = 75.0
+                self.current_phase = "Grouping candidates and computing sparse hashes..."
+                self.duplicates = self._group_duplicates(all_media_items)
 
         finally:
             self.is_scanning = False
+            self.progress_pct = 100.0 if not self.cancel_requested else self.progress_pct
+            self.current_phase = "Scan completed." if not self.cancel_requested else "Scan cancelled."
             self.last_scan_duration = round(time.time() - start_time, 2)
 
         return {
@@ -320,6 +351,9 @@ class MediaScanner:
         processed_paths = set()
 
         # Find exact matches (same byte size + matching sparse hash)
+        cand_count = sum(len(items) for items in size_buckets.values() if len(items) > 1)
+        hashed_so_far = 0
+
         for sz, items in size_buckets.items():
             if len(items) > 1:
                 # Compute sparse hash to confirm
@@ -328,6 +362,9 @@ class MediaScanner:
                     h = compute_sparse_hash(item["path"])
                     item["sparse_hash"] = h
                     hash_buckets.setdefault(h, []).append(item)
+                    hashed_so_far += 1
+                    if cand_count > 0:
+                        self.progress_pct = round(75.0 + (hashed_so_far / cand_count) * 20.0, 1)
 
                 for h, matched_items in hash_buckets.items():
                     if len(matched_items) > 1 and not h.startswith("err_"):
@@ -344,6 +381,9 @@ class MediaScanner:
                         })
                         for x in matched_items:
                             processed_paths.add(x["path"])
+
+        self.progress_pct = 95.0
+        self.current_phase = "Grouping quality variations and finalizing results..."
 
         # 2. Group by Movie title + Year or TV Show + Season + Episode
         title_buckets: Dict[str, List[Dict[str, Any]]] = {}

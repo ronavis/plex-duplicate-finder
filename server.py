@@ -20,9 +20,22 @@ import scanner
 
 PORT = 8282
 WEB_DIR = Path(__file__).parent / "frontend"
+CACHE_FILE = Path(__file__).parent / "scan_cache.json"
 
 scanner_instance = scanner.MediaScanner()
 active_scan_thread = None
+
+# Restore previous scan results if available
+if CACHE_FILE.exists():
+    try:
+        with open(CACHE_FILE, "r", encoding="utf-8-sig") as f:
+            cached = json.load(f)
+            scanner_instance.duplicates = cached.get("duplicate_groups", [])
+            scanner_instance.total_files_scanned = cached.get("total_files_scanned", 0)
+            scanner_instance.total_media_files = cached.get("total_media_files", 0)
+            scanner_instance.last_scan_duration = cached.get("duration_seconds", 0.0)
+    except Exception as e:
+        print("Warning loading cache:", e)
 
 
 class PlexDedupHandler(SimpleHTTPRequestHandler):
@@ -43,6 +56,10 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
             self._send_json(200, {
                 "status": "ok",
                 "is_scanning": scanner_instance.is_scanning,
+                "progress_pct": getattr(scanner_instance, "progress_pct", 0.0),
+                "current_phase": getattr(scanner_instance, "current_phase", ""),
+                "current_drive_index": getattr(scanner_instance, "current_drive_index", 0),
+                "total_drives": getattr(scanner_instance, "total_drives", 0),
                 "total_files_scanned": scanner_instance.total_files_scanned,
                 "total_media_files": scanner_instance.total_media_files,
                 "current_scanning_path": scanner_instance.current_scanning_path,
@@ -81,6 +98,17 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
 
             def run_scan():
                 scanner_instance.scan(target_paths, min_file_size_mb=min_size)
+                try:
+                    with open(CACHE_FILE, "w", encoding="utf-8") as f:
+                        json.dump({
+                            "status": "ok",
+                            "total_files_scanned": scanner_instance.total_files_scanned,
+                            "total_media_files": scanner_instance.total_media_files,
+                            "duration_seconds": scanner_instance.last_scan_duration,
+                            "duplicate_groups": scanner_instance.duplicates,
+                        }, f, indent=2)
+                except Exception:
+                    pass
 
             active_scan_thread = threading.Thread(target=run_scan, daemon=True)
             active_scan_thread.start()
