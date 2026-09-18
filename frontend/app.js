@@ -134,6 +134,19 @@ function setupEventListeners() {
 
   btnSmartSelect.addEventListener('click', autoSelectLowerQuality);
   btnClearSelection.addEventListener('click', clearSelection);
+  // Event delegation for duplicate candidate file selection
+  duplicateGroupsList.addEventListener('click', (e) => {
+    const row = e.target.closest('.file-row');
+    if (!row) return;
+    const encodedPath = row.getAttribute('data-encoded-path');
+    if (!encodedPath) return;
+    const fullPath = decodeURIComponent(encodedPath);
+    const item = window.mediaItemsByPath?.get(fullPath);
+    if (item) {
+      toggleFileSelection(fullPath, item.size_bytes, item.filename);
+    }
+  });
+
   btnDeleteSelected.addEventListener('click', openDeleteModal);
 
   // Modal
@@ -372,6 +385,13 @@ function renderDuplicateGroups() {
   const filtered = duplicateGroups.filter(g => {
     if (currentFilter === 'all') return true;
     return g.type === currentFilter;
+// Render Results
+window.mediaItemsByPath = new Map();
+
+function renderDuplicateGroups() {
+  const filtered = duplicateGroups.filter(g => {
+    if (currentFilter === 'all') return true;
+    return g.type === currentFilter;
   });
 
   if (!filtered.length) {
@@ -385,7 +405,7 @@ function renderDuplicateGroups() {
     return;
   }
 
-  duplicateGroupsList.innerHTML = filtered.map(group => {
+  duplicateGroupsList.innerHTML = filtered.map((group, groupIdx) => {
     // Find best item (highest resolution, then largest size)
     const sortedItems = [...group.items].sort((a, b) => {
       const resRank = { '4K / 2160p': 4, '1080p': 3, '720p': 2, '480p / SD': 1 };
@@ -395,28 +415,31 @@ function renderDuplicateGroups() {
     });
     const bestPath = sortedItems[0]?.path;
 
-    const fileRows = group.items.map(item => {
+    const fileRows = group.items.map((item, itemIdx) => {
+      window.mediaItemsByPath.set(item.path, item);
       const isSelected = selectedFilesForDeletion.has(item.path);
       const isBest = item.path === bestPath;
 
       const resBadgeClass = item.resolution.includes('4K') ? 'badge-res-4k' :
                             item.resolution.includes('1080') ? 'badge-res-1080p' : 'badge-res-sd';
 
+      const encodedPath = encodeURIComponent(item.path);
+
       return `
-        <div class="file-row ${isSelected ? 'marked-delete' : ''}">
+        <div class="file-row ${isSelected ? 'marked-delete' : ''}" data-encoded-path="${encodedPath}">
           <div>
-            <input type="checkbox" id="chk-${btoa(item.path).slice(0, 16)}" 
+            <input type="checkbox" id="chk-${groupIdx}-${itemIdx}" class="file-select-checkbox"
               ${isSelected ? 'checked' : ''} 
-              onchange="toggleFileSelection('${escapePath(item.path)}', ${item.size_bytes}, '${escapePath(item.filename)}')">
+              data-encoded-path="${encodedPath}">
           </div>
           <div class="file-drive">[Drive ${item.drive}:]</div>
           <div class="file-path-col">
-            <div class="file-name" title="${item.path}">${item.filename}</div>
-            <div class="file-parent">${item.parent_folder}</div>
+            <div class="file-name" title="${escapeHtml(item.path)}">${escapeHtml(item.filename)}</div>
+            <div class="file-parent">${escapeHtml(item.parent_folder)}</div>
           </div>
           <div class="file-badges">
             <span class="badge ${resBadgeClass}">${item.resolution}</span>
-            ${item.codec !== 'Unknown' ? `<span class="badge badge-accent">${item.codec}</span>` : ''}
+            ${item.codec !== 'Unknown' ? `<span class="badge badge-accent">${escapeHtml(item.codec)}</span>` : ''}
             ${isBest ? `<span class="badge badge-keep">⭐ Keep</span>` : ''}
           </div>
           <div class="file-date">${formatDate(item.modified_time)}</div>
@@ -428,10 +451,10 @@ function renderDuplicateGroups() {
     return `
       <div class="duplicate-group-card">
         <div class="group-header">
-          <div class="group-title">${group.title}</div>
+          <div class="group-title">${escapeHtml(group.title)}</div>
           <div class="group-meta">
             <span class="badge ${group.type === 'exact_match' ? 'badge-res-4k' : 'badge-accent'}">
-              ${group.match_reason}
+              ${escapeHtml(group.match_reason)}
             </span>
             <span class="group-reclaimable">Reclaimable: ${group.reclaimable_human}</span>
           </div>
@@ -444,8 +467,14 @@ function renderDuplicateGroups() {
   }).join('');
 }
 
-function escapePath(path) {
-  return (path || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function formatDate(timestamp) {
@@ -564,18 +593,49 @@ async function executeSafeDeletion() {
     const data = await res.json();
 
     if (data.status === 'completed') {
-      alert(`Successfully processed ${filesToDelete.length} files!\nReclaimed: ${data.reclaimed_human}`);
-      selectedFilesForDeletion.clear();
-      updateSelectedCounter();
+      // Close modal immediately so it disappears from screen
       closeDeleteModal();
 
+      // Clear selections
+      selectedFilesForDeletion.clear();
+      updateSelectedCounter();
+
+      // Update remaining duplicates list
       duplicateGroups = data.remaining_groups || [];
       updateStats();
       renderDuplicateGroups();
+
+      // Show sleek non-blocking notification
+      showToast(`Removed ${filesToDelete.length} duplicate file(s). Reclaimed: ${data.reclaimed_human}`);
+    } else {
+      alert('Error removing files: ' + (data.message || 'Operation failed.'));
     }
   } catch (err) {
     alert('Error removing files: ' + err.message);
   } finally {
     btnModalConfirm.textContent = 'Confirm Removal';
+    btnModalConfirm.disabled = false;
   }
+}
+
+function showToast(message) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.innerHTML = `
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--plex-gold);">
+      <circle cx="12" cy="12" r="10" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+    <span>${escapeHtml(message)}</span>
+  `;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(15px)';
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
 }

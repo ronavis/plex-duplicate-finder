@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Plex Duplicate Finder | Localhost Media Library Manager</title>
+  <title>Plex Space Reclaimer | Localhost Media Library Manager</title>
   <meta name="description" content="High-performance duplicate movie and TV show finder across multiple Plex hard drives.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,14 +15,14 @@
     <!-- Header -->
     <header class="app-header">
       <div class="brand-section">
-        <div class="brand-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="2" width="20" height="20" rx="4" />
-            <path d="m10 8 6 4-6 4V8Z" fill="currentColor" />
+        <div class="brand-icon plex-logo-icon">
+          <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Official Plex Chevron Logo -->
+            <path d="M9 7L24 20L9 33H16L31 20L16 7H9Z" fill="#E5A00D" />
           </svg>
         </div>
         <div>
-          <h1 class="brand-title">Plex Duplicate Finder</h1>
+          <h1 class="brand-title">Plex Space Reclaimer</h1>
           <p class="brand-subtitle">Smart multi-drive deduplication for movies & TV series</p>
         </div>
       </div>
@@ -223,6 +223,9 @@
         </div>
       </div>
     </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container"></div>
   </div>
 
   <script src="app.js"></script>

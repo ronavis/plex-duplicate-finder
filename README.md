@@ -1,4 +1,4 @@
-# 🎬 Plex Duplicate Finder
+# 🎬 Plex Space Reclaimer
 
 A high-performance localhost web application designed to scan, detect, compare, and safely delete duplicate Movies and TV Shows across multiple storage drives (NTFS, exFAT, NAS).
 

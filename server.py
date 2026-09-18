@@ -140,7 +140,11 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
                     # Remove from current duplicate list in memory
                     for group in scanner_instance.duplicates:
                         group["items"] = [item for item in group["items"] if item["path"] != fp]
-                    # Filter out empty or single-item groups
+                        if len(group["items"]) > 1:
+                            group["reclaimable_bytes"] = sum(x["size_bytes"] for x in group["items"][1:])
+                            group["reclaimable_human"] = scanner.format_bytes(group["reclaimable_bytes"])
+
+                    # Filter out groups that no longer have duplicates (< 2 items)
                     scanner_instance.duplicates = [
                         g for g in scanner_instance.duplicates if len(g["items"]) > 1
                     ]
@@ -151,6 +155,19 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
                     "message": message,
                     "size_bytes": sz,
                 })
+
+            # Immediately persist remaining duplicates to disk cache
+            try:
+                with open(CACHE_FILE, "w", encoding="utf-8") as f:
+                    json.dump({
+                        "status": "ok",
+                        "total_files_scanned": scanner_instance.total_files_scanned,
+                        "total_media_files": scanner_instance.total_media_files,
+                        "duration_seconds": scanner_instance.last_scan_duration,
+                        "duplicate_groups": scanner_instance.duplicates,
+                    }, f, indent=2)
+            except Exception:
+                pass
 
             self._send_json(200, {
                 "status": "completed",
