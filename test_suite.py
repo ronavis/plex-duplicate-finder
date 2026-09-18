@@ -164,6 +164,42 @@ class TestApiEndpoints(unittest.TestCase):
             self.assertEqual(data["status"], "ok")
             self.assertIn("connection", data)
 
+    def test_plex_oauth_pin_endpoint(self):
+        import urllib.request
+        req = urllib.request.Request("http://127.0.0.1:8282/api/plex/oauth/pin")
+        with urllib.request.urlopen(req, timeout=8.0) as resp:
+            self.assertEqual(resp.status, 200)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertEqual(data["status"], "ok")
+            self.assertIn("pin_id", data)
+            self.assertIn("auth_url", data)
+
+    def test_plex_oauth_check_endpoint(self):
+        import urllib.request
+        # First generate a real PIN
+        pin_req = urllib.request.Request("http://127.0.0.1:8282/api/plex/oauth/pin")
+        with urllib.request.urlopen(pin_req, timeout=8.0) as resp:
+            pin_data = json.loads(resp.read().decode("utf-8"))
+            real_pin_id = pin_data["pin_id"]
+
+        req = urllib.request.Request(f"http://127.0.0.1:8282/api/plex/oauth/check?pin_id={real_pin_id}")
+        with urllib.request.urlopen(req, timeout=8.0) as resp:
+            self.assertEqual(resp.status, 200)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertEqual(data["status"], "ok")
+            self.assertIn("claimed", data)
+            self.assertFalse(data["claimed"])
+
+    def test_plex_poster_not_found_endpoint(self):
+        import urllib.request
+        import urllib.error
+        try:
+            req = urllib.request.Request("http://127.0.0.1:8282/api/plex/poster?title=NonExistentMovie12345XYZ")
+            with urllib.request.urlopen(req, timeout=4.0) as resp:
+                self.assertEqual(resp.status, 404)
+        except urllib.error.HTTPError as e:
+            self.assertEqual(e.code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()

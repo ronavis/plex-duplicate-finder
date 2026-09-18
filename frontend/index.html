@@ -318,8 +318,40 @@
           <button id="btn-modal-plex-close" class="modal-close-btn">&times;</button>
         </div>
         <div class="modal-body">
-          <p class="modal-description">Connect directly to your local or network Plex Media Server to cross-reference editions, watch history, and trigger library updates automatically.</p>
+          <p class="modal-description">Connect directly to your local or network Plex Media Server to cross-reference editions, display movie poster art, and trigger library updates automatically.</p>
           
+          <!-- Automatic 1-Click Plex OAuth -->
+          <div class="plex-oauth-card">
+            <div class="oauth-card-badge">⚡ Recommended</div>
+            <div class="oauth-card-body">
+              <div class="oauth-title">Automatic 1-Click Sign In</div>
+              <div class="oauth-desc">Sign in with your Plex account to automatically detect your server IP, connection port, and authentication token. No manual entry needed!</div>
+              <button id="btn-plex-oauth" type="button" class="btn btn-plex-gold">
+                <span class="plex-logo-badge">▶</span> Sign In with Plex
+              </button>
+            </div>
+
+            <!-- OAuth Polling & Discovery Status -->
+            <div id="oauth-status-box" class="oauth-status-box hidden">
+              <div class="spinner-sm"></div>
+              <div class="oauth-status-text" id="oauth-status-text">Connecting to Plex...</div>
+              <button id="btn-cancel-oauth" type="button" class="btn-text-muted">Cancel</button>
+            </div>
+
+            <!-- Server Discovery Selector (when multiple servers exist) -->
+            <div id="oauth-servers-box" class="oauth-servers-box hidden">
+              <label for="select-discovered-server">Detected Plex Media Server(s):</label>
+              <div class="select-row">
+                <select id="select-discovered-server" class="input-control select-control"></select>
+                <button id="btn-connect-discovered" type="button" class="btn btn-sm btn-primary">Connect</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-section-divider">
+            <span>OR CONFIGURE MANUALLY</span>
+          </div>
+
           <div class="form-group">
             <label for="input-plex-url">Plex Server URL</label>
             <input type="text" id="input-plex-url" class="input-control" placeholder="http://127.0.0.1:32400" value="http://127.0.0.1:32400">
@@ -332,7 +364,11 @@
             <span class="field-hint">Optional for unauthenticated local servers, or enter your 20-character token.</span>
           </div>
 
-          <div class="form-group">
+          <div class="token-helper-tip">
+            💡 <strong>Where to find your Plex Token manually:</strong> Open Plex Web &rarr; click (...) on any movie &rarr; <em>Get Info</em> &rarr; <em>View XML</em>. Look in your <strong>browser's address bar at the very top</strong> for <code>&amp;X-Plex-Token=...</code> at the end of the URL. (It is in the URL address bar, not inside the XML text).
+          </div>
+
+          <div class="form-group" style="margin-top: 6px;">
             <label class="checkbox-label">
               <input type="checkbox" id="check-plex-autorefresh" checked>
               <span>Automatically trigger Plex library scan after deleting duplicates</span>

@@ -87,6 +87,13 @@ const btnTestPlex = document.getElementById('btn-test-plex');
 const btnSavePlex = document.getElementById('btn-save-plex');
 const plexTestResult = document.getElementById('plex-test-result');
 const plexStatusDot = document.getElementById('plex-status-dot');
+const btnPlexOauth = document.getElementById('btn-plex-oauth');
+const oauthStatusBox = document.getElementById('oauth-status-box');
+const oauthStatusText = document.getElementById('oauth-status-text');
+const btnCancelOauth = document.getElementById('btn-cancel-oauth');
+const oauthServersBox = document.getElementById('oauth-servers-box');
+const selectDiscoveredServer = document.getElementById('select-discovered-server');
+const btnConnectDiscovered = document.getElementById('btn-connect-discovered');
 
 // Cleaner Modal
 const modalCleaner = document.getElementById('modal-cleaner');
@@ -278,6 +285,9 @@ function setupEventListeners() {
   if (btnModalPlexClose) btnModalPlexClose.addEventListener('click', () => modalPlex.classList.add('hidden'));
   if (btnTestPlex) btnTestPlex.addEventListener('click', testPlexConnection);
   if (btnSavePlex) btnSavePlex.addEventListener('click', savePlexConfig);
+  if (btnPlexOauth) btnPlexOauth.addEventListener('click', startPlexOAuth);
+  if (btnCancelOauth) btnCancelOauth.addEventListener('click', cancelPlexOAuth);
+  if (btnConnectDiscovered) btnConnectDiscovered.addEventListener('click', connectSelectedDiscoveredServer);
 
   // Feature 6: Cleaner Modal Setup
   if (btnOpenCleanerModal) btnOpenCleanerModal.addEventListener('click', openCleanerModal);
@@ -683,10 +693,24 @@ function renderDuplicateGroups() {
     const toggleBtnText = hasSelectedInGroup ? '✕ Deselect Group' : '✓ Select Duplicates';
     const toggleBtnClass = hasSelectedInGroup ? 'btn-group-toggle is-selected' : 'btn-group-toggle';
 
+    const firstItem = group.items && group.items[0];
+    const firstYear = firstItem ? firstItem.year : null;
+    const firstCodec = firstItem && firstItem.codec ? firstItem.codec.toUpperCase() : '';
+    const groupSubInfo = `${group.items.length} copies${firstYear ? ' • ' + firstYear : ''}${firstCodec ? ' • ' + firstCodec : ''}`;
+
     return `
       <div class="duplicate-group-card" data-group-idx="${groupIdx}">
         <div class="group-header">
-          <div class="group-title">${escapeHtml(group.title)}</div>
+          <div class="group-header-left">
+            <div class="group-poster-wrap">
+              <img class="group-poster-img" src="/api/plex/poster?title=${encodeURIComponent(group.title)}&year=${firstYear || ''}" alt="${escapeHtml(group.title)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" loading="lazy">
+              <div class="group-poster-fallback" style="display: none;">🎬</div>
+            </div>
+            <div class="group-header-title-box">
+              <div class="group-title">${escapeHtml(group.title)}</div>
+              <div class="group-sub-info">${escapeHtml(groupSubInfo)}</div>
+            </div>
+          </div>
           <div class="group-meta">
             <span class="badge ${group.type === 'exact_match' ? 'badge-res-4k' : 'badge-accent'}">
               ${escapeHtml(group.match_reason)}
@@ -1232,9 +1256,20 @@ async function checkPlexInitialStatus() {
   } catch (e) {}
 }
 
+let oauthPollTimer = null;
+let currentOauthPinId = null;
+let discoveredServersList = [];
+
 async function openPlexModal() {
   modalPlex.classList.remove('hidden');
   plexTestResult.classList.add('hidden');
+  if (oauthStatusBox) oauthStatusBox.classList.add('hidden');
+  if (oauthServersBox) oauthServersBox.classList.add('hidden');
+  if (btnPlexOauth) btnPlexOauth.disabled = false;
+  if (oauthPollTimer) {
+    clearInterval(oauthPollTimer);
+    oauthPollTimer = null;
+  }
 
   try {
     const res = await fetch('/api/plex/status');
@@ -1244,6 +1279,169 @@ async function openPlexModal() {
       checkPlexAutorefresh.checked = data.config.auto_refresh_on_delete;
     }
   } catch (e) {}
+}
+
+async function startPlexOAuth() {
+  if (oauthPollTimer) {
+    clearInterval(oauthPollTimer);
+    oauthPollTimer = null;
+  }
+
+  btnPlexOauth.disabled = true;
+  oauthStatusBox.classList.remove('hidden');
+  oauthStatusText.textContent = 'Generating 1-click Plex login PIN...';
+  oauthServersBox.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/plex/oauth/pin');
+    const data = await res.json();
+    if (data.status !== 'ok') {
+      throw new Error(data.message || 'Failed to initialize Plex OAuth');
+    }
+
+    currentOauthPinId = data.pin_id;
+    oauthStatusText.textContent = 'Plex sign-in window opened. Please approve access on plex.tv...';
+
+    // Open popup window centered on screen
+    const width = 600;
+    const height = 700;
+    const left = (window.screen.width / 2) - (width / 2);
+    const top = (window.screen.height / 2) - (height / 2);
+    const authPopup = window.open(
+      data.auth_url,
+      'PlexOAuthPopup',
+      `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,status=yes`
+    );
+
+    // Poll PIN status every 1.5 seconds
+    oauthPollTimer = setInterval(async () => {
+      try {
+        const checkRes = await fetch(`/api/plex/oauth/check?pin_id=${currentOauthPinId}`);
+        const checkData = await checkRes.json();
+        if (checkData.claimed && checkData.auth_token) {
+          clearInterval(oauthPollTimer);
+          oauthPollTimer = null;
+          if (authPopup && !authPopup.closed) {
+            try { authPopup.close(); } catch (e) {}
+          }
+          handleOAuthSuccess(checkData.auth_token);
+        }
+      } catch (pollErr) {
+        console.warn('OAuth poll check warning:', pollErr);
+      }
+    }, 1500);
+
+  } catch (err) {
+    oauthStatusBox.classList.add('hidden');
+    btnPlexOauth.disabled = false;
+    alert('Error starting Plex Sign-In: ' + err.message);
+  }
+}
+
+function cancelPlexOAuth() {
+  if (oauthPollTimer) {
+    clearInterval(oauthPollTimer);
+    oauthPollTimer = null;
+  }
+  oauthStatusBox.classList.add('hidden');
+  btnPlexOauth.disabled = false;
+}
+
+async function handleOAuthSuccess(authToken) {
+  oauthStatusText.textContent = 'Signed in! Discovering your Plex Media Server(s)...';
+
+  try {
+    const claimRes = await fetch('/api/plex/oauth/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ auth_token: authToken })
+    });
+    const claimData = await claimRes.json();
+
+    if (claimData.status === 'ok') {
+      inputPlexUrl.value = claimData.server_url;
+      inputPlexToken.value = claimData.token;
+
+      if (claimData.connected) {
+        oauthStatusText.innerHTML = `✅ Connected to <strong>${escapeHtml(claimData.server_name)}</strong>!`;
+        showToast(`Connected to Plex server ${claimData.server_name}!`);
+        if (plexStatusDot) plexStatusDot.className = 'status-dot dot-green';
+        // Run full diagnostic test to load sections
+        testPlexConnection();
+        // Refresh cards so poster art appears
+        if (cachedDuplicateGroups && cachedDuplicateGroups.length > 0) {
+          renderDuplicateGroups();
+        }
+      } else {
+        oauthStatusText.textContent = claimData.message || 'Server found. Verifying connection...';
+      }
+
+      if (claimData.all_servers && claimData.all_servers.length > 0) {
+        discoveredServersList = claimData.all_servers;
+        populateDiscoveredServers(discoveredServersList);
+      }
+    } else {
+      oauthStatusText.textContent = 'Discovery warning: ' + (claimData.message || 'No servers found');
+    }
+  } catch (err) {
+    oauthStatusText.textContent = 'Error connecting: ' + err.message;
+  } finally {
+    btnPlexOauth.disabled = false;
+  }
+}
+
+function populateDiscoveredServers(servers) {
+  if (!oauthServersBox || !selectDiscoveredServer) return;
+  selectDiscoveredServer.innerHTML = '';
+  
+  servers.forEach((server, sIdx) => {
+    (server.connections || []).forEach((conn, cIdx) => {
+      const opt = document.createElement('option');
+      opt.value = JSON.stringify({
+        server_url: conn.uri,
+        token: server.access_token || inputPlexToken.value
+      });
+      const tag = conn.local ? 'LAN Local' : 'Remote / Relay';
+      opt.textContent = `${server.name} — ${conn.uri} (${tag})`;
+      selectDiscoveredServer.appendChild(opt);
+    });
+  });
+
+  if (selectDiscoveredServer.options.length > 0) {
+    oauthServersBox.classList.remove('hidden');
+  }
+}
+
+async function connectSelectedDiscoveredServer() {
+  if (!selectDiscoveredServer || !selectDiscoveredServer.value) return;
+  try {
+    const chosen = JSON.parse(selectDiscoveredServer.value);
+    btnConnectDiscovered.disabled = true;
+    btnConnectDiscovered.textContent = 'Connecting...';
+
+    const res = await fetch('/api/plex/oauth/select', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(chosen)
+    });
+    const data = await res.json();
+
+    if (data.status === 'ok') {
+      inputPlexUrl.value = data.server_url;
+      showToast('Connected to selected Plex server!');
+      testPlexConnection();
+      if (cachedDuplicateGroups && cachedDuplicateGroups.length > 0) {
+        renderDuplicateGroups();
+      }
+    } else {
+      alert('Failed to connect: ' + (data.message || 'Server unreachable'));
+    }
+  } catch (e) {
+    alert('Error connecting: ' + e.message);
+  } finally {
+    btnConnectDiscovered.disabled = false;
+    btnConnectDiscovered.textContent = 'Connect';
+  }
 }
 
 async function testPlexConnection() {

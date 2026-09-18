@@ -144,6 +144,60 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
             file_path = query.get("path", [""])[0]
             self._handle_media_stream(file_path)
 
+        # Feature: Plex OAuth PIN Creation
+        elif path == "/api/plex/oauth/pin":
+            pin_data = plex_api.plex_client.create_oauth_pin()
+            self._send_json(200 if pin_data.get("status") == "ok" else 500, pin_data)
+
+        # Feature: Plex OAuth PIN Polling
+        elif path == "/api/plex/oauth/check":
+            pin_id = query.get("pin_id", [""])[0]
+            if not pin_id:
+                self._send_json(400, {"status": "error", "message": "Missing pin_id parameter"})
+            else:
+                try:
+                    res = plex_api.plex_client.check_oauth_pin(int(pin_id))
+                    self._send_json(200, res)
+                except Exception as e:
+                    self._send_json(500, {"status": "error", "message": str(e)})
+
+        # Feature: Plex Poster Proxy / Artwork Search
+        elif path == "/api/plex/poster":
+            title = query.get("title", [""])[0]
+            year_str = query.get("year", [""])[0]
+            year = int(year_str) if year_str.isdigit() else None
+            thumb = plex_api.plex_client.search_poster(title, year)
+            if thumb:
+                img_data = plex_api.plex_client.get_thumbnail_data(thumb)
+                if img_data:
+                    data, ctype = img_data
+                    self.send_response(200)
+                    self.send_header("Content-Type", ctype)
+                    self.send_header("Content-Length", str(len(data)))
+                    self.send_header("Cache-Control", "public, max-age=86400")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+            self._send_json(404, {"status": "not_found", "message": "Poster not found"})
+
+        # Feature: Direct Plex Thumb Proxy
+        elif path == "/api/plex/thumb":
+            thumb = query.get("thumb", [""])[0]
+            if thumb:
+                img_data = plex_api.plex_client.get_thumbnail_data(thumb)
+                if img_data:
+                    data, ctype = img_data
+                    self.send_response(200)
+                    self.send_header("Content-Type", ctype)
+                    self.send_header("Content-Length", str(len(data)))
+                    self.send_header("Cache-Control", "public, max-age=86400")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+            self._send_json(404, {"status": "not_found", "message": "Thumbnail not found"})
+
         else:
             # Fallback to serving static frontend files
             super().do_GET()
@@ -356,6 +410,31 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
                 count = plex_api.plex_client.refresh_all_sections()
                 success = count > 0
             self._send_json(200, {"status": "ok" if success else "error"})
+
+        # Feature: Plex OAuth Auto-Claim & Connect
+        elif path == "/api/plex/oauth/claim":
+            auth_token = body.get("auth_token", "").strip()
+            if not auth_token:
+                self._send_json(400, {"status": "error", "message": "Missing auth_token parameter"})
+            else:
+                res = plex_api.plex_client.auto_connect_oauth(auth_token)
+                self._send_json(200, res)
+
+        # Feature: Plex OAuth Server Selection
+        elif path == "/api/plex/oauth/select":
+            server_url = body.get("server_url", "").strip()
+            token = body.get("token", "").strip()
+            if not server_url:
+                self._send_json(400, {"status": "error", "message": "Missing server_url"})
+            else:
+                plex_api.plex_client.save_config(server_url, token, plex_api.plex_client.auto_refresh_on_delete)
+                conn = plex_api.plex_client.test_connection(server_url, token)
+                self._send_json(200, {
+                    "status": "ok",
+                    "connected": conn.get("connected", False),
+                    "connection": conn,
+                    "server_url": server_url
+                })
 
         else:
             self._send_json(404, {"status": "not_found"})
