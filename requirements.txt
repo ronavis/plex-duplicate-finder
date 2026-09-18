@@ -1,0 +1,8 @@
+# Optional enhancements for Plex Duplicate Finder
+# The application runs with Python standard library out-of-the-box,
+# but the packages below provide native Recycle Bin integration and fast async serving.
+
+send2trash>=1.8.3
+fastapi>=0.115.0
+uvicorn>=0.30.0
+pydantic>=2.7.0

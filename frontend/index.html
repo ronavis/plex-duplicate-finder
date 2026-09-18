@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plex Duplicate Finder | Localhost Media Library Manager</title>
+  <meta name="description" content="High-performance duplicate movie and TV show finder across multiple Plex hard drives.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand-section">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="2" width="20" height="20" rx="4" />
+            <path d="m10 8 6 4-6 4V8Z" fill="currentColor" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">Plex Duplicate Finder</h1>
+          <p class="brand-subtitle">Smart multi-drive deduplication for movies & TV series</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div id="stat-reclaimable" class="stat-pill">
+          <span class="stat-label">Reclaimable Space</span>
+          <span id="total-reclaimable-val" class="stat-val">0.00 GB</span>
+        </div>
+        <div id="stat-groups" class="stat-pill">
+          <span class="stat-label">Duplicate Groups</span>
+          <span id="total-groups-val" class="stat-val">0</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Drives Section -->
+      <section class="section-card drives-section">
+        <div class="section-header">
+          <div class="section-title-group">
+            <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="22" y1="12" x2="2" y2="12" />
+              <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+              <line x1="6" y1="16" x2="6.01" y2="16" />
+              <line x1="10" y1="16" x2="10.01" y2="16" />
+            </svg>
+            <h2>Detected Storage Drives</h2>
+          </div>
+          <div class="section-actions">
+            <button id="btn-select-plex" class="btn btn-secondary btn-sm">Select All PLEX Drives</button>
+            <button id="btn-select-all" class="btn btn-secondary btn-sm">Select All</button>
+            <button id="btn-deselect-all" class="btn btn-ghost btn-sm">Clear</button>
+          </div>
+        </div>
+
+        <div id="drives-grid" class="drives-grid">
+          <!-- Drive cards dynamically rendered -->
+          <div class="loading-placeholder">Detecting storage drives...</div>
+        </div>
+      </section>
+
+      <!-- Scan Configuration -->
+      <section class="section-card scan-config-section">
+        <div class="section-header">
+          <div class="section-title-group">
+            <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <h2>Scan Settings & Execution</h2>
+          </div>
+        </div>
+
+        <div class="scan-controls-bar">
+          <div class="control-group">
+            <label for="input-min-size">Min File Size</label>
+            <div class="input-addon-wrapper">
+              <input type="number" id="input-min-size" value="50" min="1" max="10000" class="input-control">
+              <span class="addon">MB</span>
+            </div>
+          </div>
+
+          <div class="scan-button-group">
+            <button id="btn-start-scan" class="btn btn-primary btn-lg">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              <span>Start Fast Scan</span>
+            </button>
+            <button id="btn-cancel-scan" class="btn btn-danger btn-lg hidden">
+              <span>Cancel Scan</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Scan Progress Banner -->
+        <div id="scan-progress-banner" class="scan-progress-banner hidden">
+          <div class="progress-bar-container">
+            <div id="scan-progress-bar" class="progress-bar-fill progress-indeterminate"></div>
+          </div>
+          <div class="progress-details">
+            <div class="progress-status-line">
+              <span class="pulse-indicator"></span>
+              <span id="scan-status-text">Scanning media drives...</span>
+            </div>
+            <div class="progress-stats">
+              <span>Files scanned: <strong id="prog-scanned-count">0</strong></span>
+              <span>Media files: <strong id="prog-media-count">0</strong></span>
+            </div>
+          </div>
+          <div id="scan-current-path" class="progress-current-path">Initializing...</div>
+        </div>
+      </section>
+
+      <!-- Duplicate Results Section -->
+      <section id="results-section" class="section-card results-section">
+        <div class="section-header">
+          <div class="section-title-group">
+            <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+            </svg>
+            <h2>Duplicate Candidates</h2>
+            <span id="badge-groups-count" class="badge badge-accent">0 Groups</span>
+          </div>
+
+          <div class="results-actions">
+            <button id="btn-smart-select" class="btn btn-secondary btn-sm" title="Automatically selects lower quality duplicates while keeping the highest quality version">
+              ⭐ Auto-Select Lower Quality
+            </button>
+            <button id="btn-clear-selection" class="btn btn-ghost btn-sm">Clear Selection</button>
+            <button id="btn-delete-selected" class="btn btn-danger btn-sm" disabled>
+              🗑️ Delete Selected (<span id="selected-count">0</span> files / <span id="selected-size">0 MB</span>)
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="filter-tabs">
+          <button class="filter-tab active" data-filter="all">All (<span id="filter-count-all">0</span>)</button>
+          <button class="filter-tab" data-filter="exact_match">Exact Matches (<span id="filter-count-exact">0</span>)</button>
+          <button class="filter-tab" data-filter="quality_variation">Quality Variations (<span id="filter-count-quality">0</span>)</button>
+        </div>
+
+        <!-- Groups Container -->
+        <div id="duplicate-groups-list" class="duplicate-groups-list">
+          <div class="empty-state">
+            <div class="empty-icon">🎬</div>
+            <h3>No Duplicates Scanned Yet</h3>
+            <p>Select your drives above and click <strong>Start Fast Scan</strong> to detect duplicates across your Plex storage.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Safe Deletion Modal -->
+    <div id="modal-delete" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title">
+            <svg class="modal-icon text-danger" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <h3>Confirm Safe Deletion</h3>
+          </div>
+          <button id="btn-modal-close" class="modal-close-btn">&times;</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="delete-summary-box">
+            <p>You are about to remove <strong id="modal-delete-count" class="text-danger">0</strong> duplicate files.</p>
+            <p>Total disk space to reclaim: <strong id="modal-delete-reclaim" class="text-accent">0.00 GB</strong></p>
+          </div>
+
+          <div class="safety-method-group">
+            <label class="radio-card">
+              <input type="radio" name="delete_mode" value="recycle_bin" checked>
+              <div class="radio-card-content">
+                <strong>Move to Windows Recycle Bin (Recommended)</strong>
+                <span>Files are preserved in the Windows Recycle Bin and can be easily restored if needed.</span>
+              </div>
+            </label>
+            <label class="radio-card">
+              <input type="radio" name="delete_mode" value="quarantine">
+              <div class="radio-card-content">
+                <strong>Move to Drive Quarantine Folder</strong>
+                <span>Moves duplicate files into a <code>_quarantine</code> folder on the same hard drive.</span>
+              </div>
+            </label>
+          </div>
+
+          <div class="file-list-preview">
+            <label>Files marked for removal:</label>
+            <ul id="modal-file-list" class="file-list-scroll"></ul>
+          </div>
+
+          <label class="confirmation-checkbox-label">
+            <input type="checkbox" id="check-confirm-action">
+            <span>I confirm I want to remove these duplicate files.</span>
+          </label>
+        </div>
+
+        <div class="modal-footer">
+          <button id="btn-modal-cancel" class="btn btn-secondary">Cancel</button>
+          <button id="btn-modal-confirm" class="btn btn-danger" disabled>Confirm Removal</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

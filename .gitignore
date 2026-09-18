@@ -1,0 +1,29 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Caches & Environments
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+
+# Local databases & scans
+*.db
+*.sqlite3
+scan_cache.json
+scan_history.json
+_quarantine/
+
+# Windows system files
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
