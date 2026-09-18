@@ -44,6 +44,10 @@
           <button id="btn-open-audit-modal" class="btn btn-secondary btn-sm" title="View historical log of deleted duplicate files">
             <span>📜 Deletion History</span>
           </button>
+          <button id="btn-open-optimizer-modal" class="btn btn-secondary btn-sm" title="Analyze library for massive space reclaim potential using 10-bit HEVC & Audio Modernization">
+            <span style="color: #10B981;">🚀</span>
+            <span>Space Optimizer</span>
+          </button>
         </div>
 
         <div class="header-actions">
@@ -732,6 +736,200 @@
           </div>
           <button id="btn-migrator-close" class="btn btn-secondary">Close</button>
           <button id="btn-migrator-start" class="btn btn-primary" disabled>⚡ Start Turbo Migration</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Space Optimization Advisor & Savings Analyzer Modal -->
+    <div id="modal-optimizer" class="modal-backdrop hidden">
+      <div class="modal-card modal-xl">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span style="color: #10B981; font-size: 1.3rem;">🚀</span>
+            <h3>Space Optimization Advisor &amp; Savings Analyzer</h3>
+            <span class="badge badge-accent" style="margin-left: 10px; background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3);">
+              ⚡ Intel(R) N150 QSV Hardware Detected
+            </span>
+          </div>
+          <button id="btn-modal-optimizer-close" class="modal-close-btn">&times;</button>
+        </div>
+
+        <div class="modal-body optimizer-modal-body">
+          <div class="optimizer-intro-banner">
+            <p class="modal-description" style="margin-bottom: 0;">
+              Identify bloated legacy video codecs (<strong>H.264 / AVC</strong>, <strong>MPEG-2</strong>) and uncompressed audio streams (<strong>DTS-HD MA</strong>, <strong>Dolby TrueHD</strong>). Modernizing to <strong>10-bit HEVC</strong> and <strong>Dolby Digital Plus (E-AC-3 5.1)</strong> typically reclaims <strong>50% to 70%</strong> of storage space with zero visible quality loss.
+            </p>
+          </div>
+
+          <!-- Controls Bar -->
+          <div class="optimizer-controls-bar">
+            <div class="optimizer-control-group" style="flex: 2;">
+              <label>Drives to Audit:</label>
+              <div id="optimizer-drives-chips" class="drives-chips-container">
+                <!-- Dynamically filled with drive pills -->
+              </div>
+            </div>
+
+            <div class="optimizer-control-group">
+              <label>Category:</label>
+              <div class="btn-group-pill">
+                <button type="button" class="btn-pill-opt active" data-optimizer-cat="all">All</button>
+                <button type="button" class="btn-pill-opt" data-optimizer-cat="movies">Movies</button>
+                <button type="button" class="btn-pill-opt" data-optimizer-cat="tv">TV Shows</button>
+              </div>
+            </div>
+
+            <div class="optimizer-control-group">
+              <label for="input-optimizer-min-size">Min Size:</label>
+              <div class="input-addon-wrapper" style="max-width: 110px;">
+                <input type="number" id="input-optimizer-min-size" value="100" min="10" max="5000" class="input-control">
+                <span class="addon">MB</span>
+              </div>
+            </div>
+
+            <div class="optimizer-control-actions">
+              <button id="btn-start-optimizer-scan" class="btn btn-primary" style="background: linear-gradient(135deg, #059669, #10B981); white-space: nowrap;">
+                <span>⚡ Run Optimization Audit</span>
+              </button>
+              <button id="btn-cancel-optimizer-scan" class="btn btn-danger hidden">Cancel</button>
+            </div>
+          </div>
+
+          <!-- Scanning Progress Bar -->
+          <div id="optimizer-scanning-banner" class="optimizer-progress-box hidden">
+            <div class="progress-title-row">
+              <span id="optimizer-progress-label">Auditing media streams...</span>
+              <span id="optimizer-progress-pct">0%</span>
+            </div>
+            <div class="progress-bar-track">
+              <div id="optimizer-progress-bar" class="progress-bar-fill" style="width: 0%; background: linear-gradient(90deg, #10B981, #059669);"></div>
+            </div>
+            <div id="optimizer-progress-file" class="progress-file-sub">Analyzing...</div>
+          </div>
+
+          <!-- Analytics Dashboard Strip -->
+          <div id="optimizer-stats-strip" class="optimizer-stats-grid hidden">
+            <div class="opt-stat-card">
+              <div class="opt-stat-label">Total Storage Audited</div>
+              <div id="opt-stat-total-storage" class="opt-stat-value">0.00 TB</div>
+              <div id="opt-stat-total-files" class="opt-stat-sub">0 files across 0 titles</div>
+            </div>
+            <div class="opt-stat-card highlight-green">
+              <div class="opt-stat-label">Reclaimable Potential</div>
+              <div id="opt-stat-total-reclaim" class="opt-stat-value text-emerald">0.00 TB</div>
+              <div id="opt-stat-reclaim-pct" class="opt-stat-sub">0.0% overall space savings</div>
+            </div>
+            <div class="opt-stat-card">
+              <div class="opt-stat-label">High Priority Candidates</div>
+              <div id="opt-stat-high-priority" class="opt-stat-value">0 Titles</div>
+              <div class="opt-stat-sub">Heavyweight AVC / Lossless Audio</div>
+            </div>
+            <div class="opt-stat-card">
+              <div class="opt-stat-label">Intel QSV Transcode Speed</div>
+              <div class="opt-stat-value" style="color: var(--plex-gold);">~180+ FPS</div>
+              <div id="opt-stat-qsv-time" class="opt-stat-sub">Est. ~0.0 Hours Total</div>
+            </div>
+          </div>
+
+          <!-- Codec Distribution Meter -->
+          <div id="optimizer-distribution-container" class="optimizer-distribution-wrap hidden">
+            <div class="dist-header">
+              <span>Library Codec Makeup:</span>
+              <div class="dist-legend">
+                <span class="legend-item"><span class="legend-dot dot-avc"></span> AVC / H.264 (High Savings)</span>
+                <span class="legend-item"><span class="legend-dot dot-hevc"></span> HEVC / AV1 (Optimized)</span>
+                <span class="legend-item"><span class="legend-dot dot-mpeg"></span> MPEG-2 / Other</span>
+              </div>
+            </div>
+            <div class="dist-meter-bar" id="optimizer-codec-bar">
+              <!-- Dynamically populated segments -->
+            </div>
+          </div>
+
+          <!-- Filter & Search Bar -->
+          <div id="optimizer-filter-bar" class="optimizer-filter-bar hidden">
+            <input type="text" id="input-optimizer-search" class="input-control" placeholder="Search show or movie title...">
+            <div class="filter-pills">
+              <button type="button" class="btn-filter-pill active" data-prio-filter="all">All Titles</button>
+              <button type="button" class="btn-filter-pill" data-prio-filter="high">High Savings Only</button>
+              <button type="button" class="btn-filter-pill" data-prio-filter="lossless">Lossless Audio Only</button>
+            </div>
+            <div class="sort-wrapper">
+              <label for="select-optimizer-sort">Sort:</label>
+              <select id="select-optimizer-sort" class="input-control select-control" style="width: auto;">
+                <option value="reclaim_desc">Most Space Reclaimed</option>
+                <option value="size_desc">Largest Original Size</option>
+                <option value="pct_desc">Highest % Reduction</option>
+                <option value="title_asc">Title (A-Z)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Candidates Table -->
+          <div class="optimizer-table-wrapper">
+            <table class="optimizer-table">
+              <thead>
+                <tr>
+                  <th>Title / Media Name</th>
+                  <th style="width: 100px;">Type</th>
+                  <th style="width: 160px;">Codecs &amp; Audio</th>
+                  <th style="width: 120px; text-align: right;">Current Size</th>
+                  <th style="width: 120px; text-align: right;">Optimized Size</th>
+                  <th style="width: 160px; text-align: right;">Reclaim Potential</th>
+                  <th style="width: 130px; text-align: center;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="optimizer-items-tbody">
+                <tr><td colspan="7" class="table-loading">Click "Run Optimization Audit" to analyze your drives for reclaimable space...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <div class="optimizer-footer-left" id="optimizer-footer-summary">
+            Audit ready &bull; Recommended target: <strong>10-bit HEVC + E-AC-3</strong>
+          </div>
+          <button id="btn-modal-optimizer-close-footer" class="btn btn-secondary">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Optimization Preset & Command Viewer Modal -->
+    <div id="modal-optimizer-preset" class="modal-backdrop hidden">
+      <div class="modal-card modal-lg">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span style="color: #10B981; font-size: 1.3rem;">⚡</span>
+            <h3 id="preset-modal-title">Intel QuickSync Transcode Profile</h3>
+          </div>
+          <button id="btn-modal-preset-close" class="modal-close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="preset-info-banner">
+            <div style="font-weight: 600; color: #10B981; margin-bottom: 4px;">Hardware Acceleration Profile:</div>
+            <div id="preset-modal-hardware" style="color: var(--text-primary); font-size: 0.95rem;">Intel(R) N150 UHD Graphics (Gen 12 Xe-LP QuickSync)</div>
+            <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 4px;">Hardware ASIC encoding delivers ~150 - 250 FPS with ~0% CPU load.</div>
+          </div>
+
+          <div class="preset-section-title">1. Ready-to-Run FFmpeg QuickSync Command:</div>
+          <div class="code-box-wrapper">
+            <pre><code id="preset-ffmpeg-code">ffmpeg -hwaccel qsv ...</code></pre>
+            <button id="btn-copy-ffmpeg" class="btn btn-secondary btn-sm btn-copy">Copy Command</button>
+          </div>
+
+          <div class="preset-section-title" style="margin-top: 18px;">2. Handbrake Preset Settings:</div>
+          <div class="handbrake-grid" id="preset-handbrake-grid">
+            <!-- Dynamically populated key/value grid -->
+          </div>
+
+          <div class="preset-section-title" style="margin-top: 18px;">3. Recommended Tdarr Community Plugins:</div>
+          <ul class="tdarr-plugin-list" id="preset-tdarr-list">
+            <!-- Dynamically populated -->
+          </ul>
+        </div>
+        <div class="modal-footer">
+          <button id="btn-modal-preset-close-footer" class="btn btn-secondary">Close</button>
         </div>
       </div>
     </div>

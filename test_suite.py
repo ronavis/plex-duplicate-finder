@@ -250,6 +250,27 @@ class TestApiEndpoints(unittest.TestCase):
         except urllib.error.HTTPError as e:
             self.assertEqual(e.code, 404)
 
+    def test_optimizer_api_endpoints(self):
+        import urllib.request
+        import optimizer
+        # Test status endpoint
+        req = urllib.request.Request("http://127.0.0.1:8282/api/optimizer/status")
+        with urllib.request.urlopen(req, timeout=4.0) as resp:
+            self.assertEqual(resp.status, 200)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertEqual(data["status"], "ok")
+            self.assertIn("candidates", data)
+
+        # Test preset endpoint
+        req = urllib.request.Request("http://127.0.0.1:8282/api/optimizer/preset?title=The%20Blacklist")
+        with urllib.request.urlopen(req, timeout=4.0) as resp:
+            self.assertEqual(resp.status, 200)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertEqual(data["status"], "ok")
+            self.assertIn("ffmpeg_qsv_command", data)
+            self.assertIn("hevc_qsv", data["ffmpeg_qsv_command"])
+
 
 if __name__ == "__main__":
     unittest.main()
+

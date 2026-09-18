@@ -2371,3 +2371,456 @@ async function cancelMigratorExecution() {
   }
 }
 
+// ==========================================================================
+// SPACE OPTIMIZATION ADVISOR & SAVINGS ANALYZER
+// ==========================================================================
+
+let optimizerPollTimer = null;
+let optimizerAllCandidates = [];
+let optimizerActiveCategory = 'all';
+let optimizerActivePriority = 'all';
+let optimizerSearchQuery = '';
+let optimizerSortBy = 'reclaim_desc';
+let optimizerSelectedDrives = new Set(['R']);
+
+// Elements
+const btnOpenOptimizerModal = document.getElementById('btn-open-optimizer-modal');
+const modalOptimizer = document.getElementById('modal-optimizer');
+const btnModalOptimizerClose = document.getElementById('btn-modal-optimizer-close');
+const btnModalOptimizerCloseFooter = document.getElementById('btn-modal-optimizer-close-footer');
+const optimizerDrivesChips = document.getElementById('optimizer-drives-chips');
+const btnStartOptimizerScan = document.getElementById('btn-start-optimizer-scan');
+const btnCancelOptimizerScan = document.getElementById('btn-cancel-optimizer-scan');
+const optimizerScanningBanner = document.getElementById('optimizer-scanning-banner');
+const optimizerProgressBar = document.getElementById('optimizer-progress-bar');
+const optimizerProgressPct = document.getElementById('optimizer-progress-pct');
+const optimizerProgressFile = document.getElementById('optimizer-progress-file');
+const optimizerStatsStrip = document.getElementById('optimizer-stats-strip');
+const optimizerDistributionContainer = document.getElementById('optimizer-distribution-container');
+const optimizerCodecBar = document.getElementById('optimizer-codec-bar');
+const optimizerFilterBar = document.getElementById('optimizer-filter-bar');
+const inputOptimizerSearch = document.getElementById('input-optimizer-search');
+const selectOptimizerSort = document.getElementById('select-optimizer-sort');
+const optimizerItemsTbody = document.getElementById('optimizer-items-tbody');
+const inputOptimizerMinSize = document.getElementById('input-optimizer-min-size');
+
+// Preset modal elements
+const modalOptimizerPreset = document.getElementById('modal-optimizer-preset');
+const btnModalPresetClose = document.getElementById('btn-modal-preset-close');
+const btnModalPresetCloseFooter = document.getElementById('btn-modal-preset-close-footer');
+const presetModalTitle = document.getElementById('preset-modal-title');
+const presetModalHardware = document.getElementById('preset-modal-hardware');
+const presetFfmpegCode = document.getElementById('preset-ffmpeg-code');
+const btnCopyFfmpeg = document.getElementById('btn-copy-ffmpeg');
+const presetHandbrakeGrid = document.getElementById('preset-handbrake-grid');
+const presetTdarrList = document.getElementById('preset-tdarr-list');
+
+function initOptimizerAdvisor() {
+  if (btnOpenOptimizerModal) {
+    btnOpenOptimizerModal.addEventListener('click', openOptimizerModal);
+  }
+  if (btnModalOptimizerClose) {
+    btnModalOptimizerClose.addEventListener('click', closeOptimizerModal);
+  }
+  if (btnModalOptimizerCloseFooter) {
+    btnModalOptimizerCloseFooter.addEventListener('click', closeOptimizerModal);
+  }
+  if (btnStartOptimizerScan) {
+    btnStartOptimizerScan.addEventListener('click', startOptimizerAudit);
+  }
+  if (btnCancelOptimizerScan) {
+    btnCancelOptimizerScan.addEventListener('click', cancelOptimizerAudit);
+  }
+  if (btnModalPresetClose) {
+    btnModalPresetClose.addEventListener('click', () => modalOptimizerPreset.classList.add('hidden'));
+  }
+  if (btnModalPresetCloseFooter) {
+    btnModalPresetCloseFooter.addEventListener('click', () => modalOptimizerPreset.classList.add('hidden'));
+  }
+  if (btnCopyFfmpeg) {
+    btnCopyFfmpeg.addEventListener('click', copyFfmpegCommand);
+  }
+
+  // Category pills
+  document.querySelectorAll('[data-optimizer-cat]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-optimizer-cat]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      optimizerActiveCategory = btn.dataset.optimizerCat;
+      renderOptimizerTable();
+    });
+  });
+
+  // Priority filters
+  document.querySelectorAll('[data-prio-filter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-prio-filter]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      optimizerActivePriority = btn.dataset.prioFilter;
+      renderOptimizerTable();
+    });
+  });
+
+  // Search input
+  if (inputOptimizerSearch) {
+    inputOptimizerSearch.addEventListener('input', (e) => {
+      optimizerSearchQuery = e.target.value.toLowerCase().trim();
+      renderOptimizerTable();
+    });
+  }
+
+  // Sort dropdown
+  if (selectOptimizerSort) {
+    selectOptimizerSort.addEventListener('change', (e) => {
+      optimizerSortBy = e.target.value;
+      renderOptimizerTable();
+    });
+  }
+}
+
+async function openOptimizerModal() {
+  modalOptimizer.classList.remove('hidden');
+  populateOptimizerDrives();
+  await fetchOptimizerStatus();
+}
+
+function closeOptimizerModal() {
+  modalOptimizer.classList.add('hidden');
+}
+
+function populateOptimizerDrives() {
+  if (!optimizerDrivesChips) return;
+  optimizerDrivesChips.innerHTML = '';
+
+  availableDrives.forEach(d => {
+    if (d.label && d.label.toLowerCase().includes('windows')) return;
+    const chip = document.createElement('div');
+    chip.className = 'drive-chip';
+    const isSelected = optimizerSelectedDrives.has(d.letter) || (optimizerSelectedDrives.size === 0 && d.letter === 'R');
+    if (isSelected) {
+      chip.classList.add('selected');
+      optimizerSelectedDrives.add(d.letter);
+    }
+    chip.innerHTML = `<strong>${d.letter}:</strong> ${d.label || 'Storage'} (${d.free_human} free)`;
+    chip.addEventListener('click', () => {
+      if (optimizerSelectedDrives.has(d.letter)) {
+        if (optimizerSelectedDrives.size > 1) {
+          optimizerSelectedDrives.delete(d.letter);
+          chip.classList.remove('selected');
+        }
+      } else {
+        optimizerSelectedDrives.add(d.letter);
+        chip.classList.add('selected');
+      }
+    });
+    optimizerDrivesChips.appendChild(chip);
+  });
+}
+
+async function fetchOptimizerStatus() {
+  try {
+    const res = await fetch('/api/optimizer/status');
+    const data = await res.json();
+    if (data.status === 'ok') {
+      if (data.is_scanning) {
+        showOptimizerScanningState(data);
+        startOptimizerPolling();
+      } else if (data.candidates && data.candidates.length > 0) {
+        optimizerAllCandidates = data.candidates;
+        showOptimizerResults(data);
+      }
+    }
+  } catch (e) {
+    console.warn('Error fetching optimizer status:', e);
+  }
+}
+
+async function startOptimizerAudit() {
+  const drives = Array.from(optimizerSelectedDrives);
+  if (drives.length === 0) {
+    alert('Please select at least one drive to audit.');
+    return;
+  }
+  const minSize = parseInt(inputOptimizerMinSize?.value || '100', 10);
+
+  btnStartOptimizerScan.disabled = true;
+  btnCancelOptimizerScan.classList.remove('hidden');
+  optimizerScanningBanner.classList.remove('hidden');
+
+  try {
+    const res = await fetch('/api/optimizer/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        drives: drives,
+        min_size_mb: minSize,
+        category: optimizerActiveCategory
+      })
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      startOptimizerPolling();
+    } else {
+      alert('Failed to start scan: ' + data.message);
+      btnStartOptimizerScan.disabled = false;
+      btnCancelOptimizerScan.classList.add('hidden');
+    }
+  } catch (e) {
+    alert('Error starting audit: ' + e.message);
+    btnStartOptimizerScan.disabled = false;
+    btnCancelOptimizerScan.classList.add('hidden');
+  }
+}
+
+async function cancelOptimizerAudit() {
+  try {
+    await fetch('/api/optimizer/cancel', { method: 'POST' });
+    btnCancelOptimizerScan.textContent = 'Cancelling...';
+    btnCancelOptimizerScan.disabled = true;
+  } catch (e) {
+    alert('Error cancelling audit: ' + e.message);
+  }
+}
+
+function startOptimizerPolling() {
+  if (optimizerPollTimer) clearInterval(optimizerPollTimer);
+  optimizerPollTimer = setInterval(pollOptimizerStatus, 800);
+}
+
+async function pollOptimizerStatus() {
+  try {
+    const res = await fetch('/api/optimizer/status');
+    const data = await res.json();
+    if (data.is_scanning) {
+      showOptimizerScanningState(data);
+    } else {
+      clearInterval(optimizerPollTimer);
+      optimizerPollTimer = null;
+      btnStartOptimizerScan.disabled = false;
+      btnCancelOptimizerScan.classList.add('hidden');
+      optimizerScanningBanner.classList.add('hidden');
+
+      if (data.candidates && data.candidates.length > 0) {
+        optimizerAllCandidates = data.candidates;
+        showOptimizerResults(data);
+        showToast(`Optimization audit completed! ${data.total_candidates} titles analyzed.`);
+      }
+    }
+  } catch (e) {
+    console.warn('Optimizer polling error:', e);
+  }
+}
+
+function showOptimizerScanningState(data) {
+  optimizerScanningBanner.classList.remove('hidden');
+  btnStartOptimizerScan.disabled = true;
+  btnCancelOptimizerScan.classList.remove('hidden');
+  btnCancelOptimizerScan.disabled = false;
+  btnCancelOptimizerScan.textContent = 'Cancel';
+  if (optimizerProgressBar) optimizerProgressBar.style.width = `${data.progress_pct}%`;
+  if (optimizerProgressPct) optimizerProgressPct.textContent = `${data.progress_pct}%`;
+  if (optimizerProgressFile) optimizerProgressFile.textContent = `Analyzing: ${data.current_item}`;
+}
+
+function showOptimizerResults(data) {
+  optimizerStatsStrip.classList.remove('hidden');
+  optimizerDistributionContainer.classList.remove('hidden');
+  optimizerFilterBar.classList.remove('hidden');
+
+  const st = data.stats || {};
+  const elStorage = document.getElementById('opt-stat-total-storage');
+  if (elStorage) elStorage.textContent = st.total_storage_human || data.total_bytes_human || '0.00 TB';
+
+  const elFiles = document.getElementById('opt-stat-total-files');
+  if (elFiles) elFiles.textContent = `${st.total_files || data.total_files_scanned} files in ${data.total_candidates} titles`;
+
+  const elReclaim = document.getElementById('opt-stat-total-reclaim');
+  if (elReclaim) elReclaim.textContent = st.total_reclaimable_human || data.total_reclaimable_human || '0.00 TB';
+
+  const elReclaimPct = document.getElementById('opt-stat-reclaim-pct');
+  if (elReclaimPct) elReclaimPct.textContent = `${st.overall_reclaim_pct || data.overall_savings_pct || 0}% overall space savings`;
+
+  const elHighPrio = document.getElementById('opt-stat-high-priority');
+  if (elHighPrio) elHighPrio.textContent = `${st.high_priority_candidates || 0} Titles`;
+
+  const elQsvTime = document.getElementById('opt-stat-qsv-time');
+  if (elQsvTime) elQsvTime.textContent = `Est. ~${st.est_qsv_hours || 0} Hours Total with QSV`;
+
+  renderCodecDistributionBar(st.codec_distribution || {});
+  renderOptimizerTable();
+}
+
+function renderCodecDistributionBar(dist) {
+  if (!optimizerCodecBar) return;
+  optimizerCodecBar.innerHTML = '';
+  const total = Object.values(dist).reduce((a, b) => a + b, 0);
+  if (total === 0) return;
+
+  const avcCount = dist['AVC / H.264'] || 0;
+  const hevcCount = (dist['HEVC / H.265'] || 0) + (dist['AV1'] || 0);
+  const mpegCount = dist['MPEG-2 / VC-1'] || 0;
+  const otherCount = dist['Other'] || 0;
+
+  const avcPct = (avcCount / total) * 100;
+  const hevcPct = (hevcCount / total) * 100;
+  const mpegPct = (mpegCount / total) * 100;
+  const otherPct = (otherCount / total) * 100;
+
+  if (avcPct > 0) {
+    const seg = document.createElement('div');
+    seg.className = 'dist-seg dist-seg-avc';
+    seg.style.width = `${avcPct}%`;
+    seg.title = `AVC / H.264: ${avcCount} files (${avcPct.toFixed(1)}%)`;
+    optimizerCodecBar.appendChild(seg);
+  }
+  if (hevcPct > 0) {
+    const seg = document.createElement('div');
+    seg.className = 'dist-seg dist-seg-hevc';
+    seg.style.width = `${hevcPct}%`;
+    seg.title = `HEVC / AV1: ${hevcCount} files (${hevcPct.toFixed(1)}%)`;
+    optimizerCodecBar.appendChild(seg);
+  }
+  if (mpegPct > 0) {
+    const seg = document.createElement('div');
+    seg.className = 'dist-seg dist-seg-mpeg';
+    seg.style.width = `${mpegPct}%`;
+    seg.title = `MPEG-2 / VC-1: ${mpegCount} files (${mpegPct.toFixed(1)}%)`;
+    optimizerCodecBar.appendChild(seg);
+  }
+  if (otherPct > 0) {
+    const seg = document.createElement('div');
+    seg.className = 'dist-seg dist-seg-other';
+    seg.style.width = `${otherPct}%`;
+    seg.title = `Other: ${otherCount} files (${otherPct.toFixed(1)}%)`;
+    optimizerCodecBar.appendChild(seg);
+  }
+}
+
+function renderOptimizerTable() {
+  if (!optimizerItemsTbody) return;
+  let items = [...optimizerAllCandidates];
+
+  if (optimizerActiveCategory !== 'all') {
+    items = items.filter(x => x.type === optimizerActiveCategory);
+  }
+
+  if (optimizerActivePriority === 'high') {
+    items = items.filter(x => x.priority === 'High');
+  } else if (optimizerActivePriority === 'lossless') {
+    items = items.filter(x => x.is_lossless_audio);
+  }
+
+  if (optimizerSearchQuery) {
+    items = items.filter(x => x.title.toLowerCase().includes(optimizerSearchQuery));
+  }
+
+  if (optimizerSortBy === 'reclaim_desc') {
+    items.sort((a, b) => b.reclaimable_bytes - a.reclaimable_bytes);
+  } else if (optimizerSortBy === 'size_desc') {
+    items.sort((a, b) => b.total_size_bytes - a.total_size_bytes);
+  } else if (optimizerSortBy === 'pct_desc') {
+    items.sort((a, b) => b.savings_pct - a.savings_pct);
+  } else if (optimizerSortBy === 'title_asc') {
+    items.sort((a, b) => a.title.localeCompare(b.title));
+  }
+
+  if (items.length === 0) {
+    optimizerItemsTbody.innerHTML = '<tr><td colspan="7" class="table-empty">No media items matched the selected filters.</td></tr>';
+    return;
+  }
+
+  optimizerItemsTbody.innerHTML = items.map(it => {
+    const isAvc = it.primary_video_codec.includes('AVC') || it.primary_video_codec.includes('H.264');
+    const isHevc = it.primary_video_codec.includes('HEVC') || it.primary_video_codec.includes('H.265');
+    const vBadgeClass = isHevc ? 'codec-pill-hevc' : (isAvc ? 'codec-pill-avc' : 'codec-pill');
+    const posterUrl = `/api/plex/poster?title=${encodeURIComponent(it.title)}&source=tmdb`;
+
+    return `
+      <tr>
+        <td>
+          <div class="title-cell-wrap">
+            <img class="title-poster-thumb" src="${posterUrl}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'38\\' height=\\'56\\' fill=\\'%23222\\'><rect width=\\'100%\\' height=\\'100%\\'/><text x=\\'50%\\' y=\\'50%\\' fill=\\'%23666\\' font-size=\\'18\\' dominant-baseline=\\'middle\\' text-anchor=\\'middle\\'>🎬</text></svg>'" alt="">
+            <div class="title-info-meta">
+              <span class="title-main-name" title="${escapeHtml(it.title)}">${escapeHtml(it.title)}</span>
+              <span class="title-sub-meta">Drive ${it.drive}: &bull; ${it.file_count} ${it.file_count === 1 ? 'file' : 'episodes'}</span>
+            </div>
+          </div>
+        </td>
+        <td>
+          <span class="badge ${it.type === 'tv' ? 'badge-primary' : 'badge-accent'}">${it.type === 'tv' ? 'TV Series' : 'Movie'}</span>
+        </td>
+        <td>
+          <div style="display: flex; flex-direction: column; gap: 3px;">
+            <span class="codec-pill ${vBadgeClass}">${escapeHtml(it.primary_video_codec)}</span>
+            <span class="codec-pill codec-pill-audio">${escapeHtml(it.primary_audio_codec)}</span>
+            ${it.is_remux ? '<span class="badge" style="font-size: 0.7rem; background: rgba(229,160,13,0.2); color: var(--plex-gold);">REMUX</span>' : ''}
+          </div>
+        </td>
+        <td style="text-align: right; font-weight: 600;">
+          ${it.total_size_human}
+        </td>
+        <td style="text-align: right; color: var(--text-secondary);">
+          ${it.projected_size_human}
+        </td>
+        <td style="text-align: right;">
+          <div class="badge-reclaim">
+            <span class="badge-reclaim-amount">+${it.reclaimable_human}</span>
+            <span class="badge-reclaim-pct">-${it.savings_pct}%</span>
+          </div>
+        </td>
+        <td style="text-align: center;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="viewOptimizerPreset('${escapeHtml(it.title).replace(/'/g, "\\'")}')" title="View Intel QuickSync transcode profile and command">
+            ⚡ Presets
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+window.viewOptimizerPreset = async function(title) {
+  try {
+    const res = await fetch(`/api/optimizer/preset?title=${encodeURIComponent(title)}`);
+    const data = await res.json();
+    if (data.status === 'ok') {
+      if (presetModalTitle) presetModalTitle.textContent = `Intel QuickSync Profile: ${data.item_title}`;
+      if (presetModalHardware) presetModalHardware.textContent = data.gpu_hardware;
+      if (presetFfmpegCode) presetFfmpegCode.textContent = data.ffmpeg_qsv_command;
+
+      if (presetHandbrakeGrid) {
+        const hb = data.handbrake_preset || {};
+        presetHandbrakeGrid.innerHTML = Object.entries(hb).map(([k, v]) => `
+          <div class="handbrake-row">
+            <span class="hb-label">${k.replace(/_/g, ' ')}</span>
+            <span class="hb-val">${v}</span>
+          </div>
+        `).join('');
+      }
+
+      if (presetTdarrList) {
+        const td = data.tdarr_plugins || [];
+        presetTdarrList.innerHTML = td.map(p => `<li>${p}</li>`).join('');
+      }
+
+      modalOptimizerPreset.classList.remove('hidden');
+    }
+  } catch (e) {
+    alert('Error generating preset: ' + e.message);
+  }
+};
+
+function copyFfmpegCommand() {
+  const code = presetFfmpegCode?.textContent || '';
+  if (!code) return;
+  navigator.clipboard.writeText(code).then(() => {
+    btnCopyFfmpeg.textContent = 'Copied!';
+    setTimeout(() => { btnCopyFfmpeg.textContent = 'Copy Command'; }, 2000);
+  }).catch(() => {
+    alert('Command copied to clipboard.');
+  });
+}
+
+// Auto-initialize Space Optimizer when app starts
+initOptimizerAdvisor();
+
+

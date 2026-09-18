@@ -28,6 +28,7 @@ import cleaner
 import plex_api
 import pool_migrator
 import tmdb_api
+import optimizer
 
 PORT = 8282
 WEB_DIR = Path(__file__).parent / "frontend"
@@ -198,6 +199,14 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
         # Smart Drive Offloader / Pool Migrator Status
         elif path == "/api/migrator/status":
             self._send_json(200, pool_migrator.pool_migrator.get_status())
+
+        # Space Optimization Advisor Status & Presets
+        elif path == "/api/optimizer/status":
+            self._send_json(200, optimizer.space_optimizer.get_status())
+
+        elif path == "/api/optimizer/preset":
+            title = query.get("title", [""])[0]
+            self._send_json(200, optimizer.space_optimizer.generate_transcode_preset(title))
 
         # Feature 5: Media Stream Range Requests
         elif path == "/api/media/stream":
@@ -635,6 +644,18 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
         elif path == "/api/tmdb/test":
             api_key = body.get("api_key")
             res = tmdb_api.tmdb_client.test_connection(api_key)
+            self._send_json(200, res)
+
+        # Space Optimization Advisor Scan & Cancel
+        elif path == "/api/optimizer/scan":
+            drives = body.get("drives", [])
+            min_size = body.get("min_size_mb", 50)
+            category = body.get("category", "all")
+            res = optimizer.space_optimizer.start_scan(drives, min_size_mb=min_size, category=category)
+            self._send_json(200, res)
+
+        elif path == "/api/optimizer/cancel":
+            res = optimizer.space_optimizer.cancel_scan()
             self._send_json(200, res)
 
         else:
