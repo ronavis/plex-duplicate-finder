@@ -3167,6 +3167,25 @@ function startTranscodePolling() {
   transcodePollTimer = setInterval(fetchTranscodeStatus, 1500);
 }
 
+function formatEtaDuration(totalSeconds) {
+  if (!totalSeconds || totalSeconds <= 0) return 'Finalizing...';
+  const sec = Math.round(totalSeconds);
+  if (sec < 60) {
+    return `${sec} second${sec === 1 ? '' : 's'}`;
+  }
+  const hours = Math.floor(sec / 3600);
+  const minutes = Math.floor((sec % 3600) / 60);
+  const remainingSeconds = sec % 60;
+
+  if (hours > 0) {
+    return minutes > 0 ? `${hours} hr ${minutes} min` : `${hours} hr`;
+  }
+  if (remainingSeconds > 0) {
+    return `${minutes} min ${remainingSeconds} second${remainingSeconds === 1 ? '' : 's'}`;
+  }
+  return `${minutes} min`;
+}
+
 async function fetchTranscodeStatus() {
   try {
     const res = await fetch('/api/transcode/status');
@@ -3202,7 +3221,10 @@ async function fetchTranscodeStatus() {
       if (queueTelemetryPct) queueTelemetryPct.textContent = `${active.progress_pct}%`;
       if (queueTelemetryFps) queueTelemetryFps.textContent = `${active.current_fps} FPS`;
       if (queueTelemetrySpeed) queueTelemetrySpeed.textContent = `${active.current_speed} real-time`;
-      if (queueTelemetryEta) queueTelemetryEta.textContent = active.eta_seconds > 0 ? `ETA: ~${active.eta_seconds}s` : 'Finalizing...';
+      if (queueTelemetryEta) {
+        const etaText = active.eta_human || formatEtaDuration(active.eta_seconds);
+        queueTelemetryEta.textContent = `ETA: ~${etaText}`;
+      }
       if (queueTelemetrySizes) {
         const projHuman = formatBytes(active.projected_size_bytes);
         queueTelemetrySizes.textContent = `${active.original_size_human} → Projected ~${projHuman}`;
@@ -3234,7 +3256,8 @@ function renderQueueTable(queue) {
     if (j.status === 'completed') {
       statusBadge = `<span class="badge badge-accent" style="background: rgba(16, 185, 129, 0.15); color: #10B981;">✓ Completed (+${j.reclaimed_human})</span>`;
     } else if (j.status === 'running') {
-      statusBadge = `<span class="badge badge-primary" style="background: rgba(229,160,13,0.2); color: var(--plex-gold);">⚡ Running (${j.progress_pct}%)</span>`;
+      const etaSub = j.eta_seconds > 0 ? ` &bull; ETA: ~${j.eta_human || formatEtaDuration(j.eta_seconds)}` : '';
+      statusBadge = `<span class="badge badge-primary" style="background: rgba(229,160,13,0.2); color: var(--plex-gold);">⚡ Running (${j.progress_pct}%${etaSub})</span>`;
     } else if (j.status === 'failed') {
       statusBadge = `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #EF4444;" title="${escapeHtml(j.error_message || '')}">✕ Failed</span>`;
     } else if (j.status === 'cancelled') {

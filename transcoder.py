@@ -165,6 +165,21 @@ class TranscodeJob:
         self.created_at = time.time()
         self.completed_at: Optional[float] = None
 
+    def get_eta_human(self) -> str:
+        if not self.eta_seconds or self.eta_seconds <= 0:
+            return "Finalizing..."
+        sec = int(self.eta_seconds)
+        if sec < 60:
+            return f"{sec} second{'s' if sec != 1 else ''}"
+        hrs = sec // 3600
+        mins = (sec % 3600) // 60
+        rem_sec = sec % 60
+        if hrs > 0:
+            return f"{hrs} hr {mins} min" if mins > 0 else f"{hrs} hr"
+        if rem_sec > 0:
+            return f"{mins} min {rem_sec} second{'s' if rem_sec != 1 else ''}"
+        return f"{mins} min"
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
@@ -180,6 +195,7 @@ class TranscodeJob:
             "current_fps": round(self.current_fps, 1),
             "current_speed": self.current_speed,
             "eta_seconds": self.eta_seconds,
+            "eta_human": self.get_eta_human(),
             "new_size_bytes": self.new_size_bytes,
             "new_size_human": self.new_size_human,
             "reclaimed_bytes": self.reclaimed_bytes,
@@ -689,13 +705,15 @@ class TranscodeQueueManager:
         audio_args = get_optimal_audio_args(get_media_info(self.ffprobe_path, file_path))
 
         # Jump 2 minutes in to avoid opening black frames/logos
+        test_dur = min(duration_sec, 30) if duration_sec > 0 else 30
         cmd = [
             self.ffmpeg_path,
             "-y",
             "-init_hw_device", "qsv=hw",
             "-ss", "00:02:00",
+            "-hwaccel", "qsv",
             "-i", file_path,
-            "-t", str(duration_sec),
+            "-t", str(test_dur),
             "-map", "0:v:0",
             "-map", "0:a?",
             "-map", "0:s?",
@@ -707,8 +725,30 @@ class TranscodeQueueManager:
         ]
 
         start_t = time.time()
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=90)
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=180)
         elapsed = time.time() - start_t
+
+        if proc.returncode != 0 or not os.path.exists(preview_out):
+            # Fallback without -hwaccel if container has non-qsv stream
+            cmd_fallback = [
+                self.ffmpeg_path,
+                "-y",
+                "-init_hw_device", "qsv=hw",
+                "-ss", "00:02:00",
+                "-i", file_path,
+                "-t", str(test_dur),
+                "-map", "0:v:0",
+                "-map", "0:a?",
+                "-map", "0:s?",
+                "-c:v", "hevc_qsv",
+                "-global_quality", str(icq),
+                *audio_args,
+                "-c:s", "copy",
+                preview_out
+            ]
+            start_t = time.time()
+            proc = subprocess.run(cmd_fallback, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=180)
+            elapsed = time.time() - start_t
 
         if proc.returncode != 0 or not os.path.exists(preview_out):
             err = proc.stderr[:400] if proc.stderr else "Unknown error"
