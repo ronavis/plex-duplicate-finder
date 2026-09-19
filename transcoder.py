@@ -12,6 +12,7 @@ import shutil
 import logging
 import threading
 import subprocess
+import collections
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
@@ -97,6 +98,37 @@ def get_media_info(ffprobe_path: str, file_path: str) -> Optional[Dict[str, Any]
     except Exception as e:
         logger.warning(f"ffprobe error on {file_path}: {e}")
     return None
+
+
+def get_optimal_audio_args(source_meta: Optional[Dict[str, Any]]) -> List[str]:
+    """
+    Intelligently select audio transcode flags:
+    - Surround sound (>= 6 channels / 5.1 / 7.1): encode to modern E-AC-3 5.1 @ 640k
+    - Stereo / Mono (<= 2 channels):
+      - If already AAC, AC3, or MP3: copy directly (-c:a copy) without bloating or re-compression
+      - If lossless FLAC, PCM, DTS, or other: compress to clean standard 160k AAC (-c:a aac -b:a 160k)
+    """
+    if not source_meta:
+        return ["-c:a", "eac3", "-b:a", "640k"]
+
+    audio_streams = [s for s in source_meta.get("streams", []) if s.get("codec_type") == "audio"]
+    if not audio_streams:
+        return ["-c:a", "copy"]
+
+    main_a = audio_streams[0]
+    try:
+        channels = int(main_a.get("channels", 2))
+    except Exception:
+        channels = 2
+    codec_name = (main_a.get("codec_name") or "").lower()
+
+    if channels >= 6:
+        return ["-c:a", "eac3", "-b:a", "640k"]
+    else:
+        if codec_name in ["aac", "ac3", "mp3"]:
+            return ["-c:a", "copy"]
+        else:
+            return ["-c:a", "aac", "-b:a", "160k"]
 
 
 class TranscodeJob:
@@ -419,7 +451,8 @@ class TranscodeQueueManager:
             except Exception:
                 total_duration_sec = 0.0
 
-        # 2. Build FFmpeg command
+        # 2. Build FFmpeg command with smart audio handling
+        audio_args = get_optimal_audio_args(source_meta)
         icq = QUALITY_PRESETS.get(self.quality_preset, QUALITY_PRESETS["balanced"])["icq"]
         cmd = [
             self.ffmpeg_path,
@@ -431,8 +464,7 @@ class TranscodeQueueManager:
             "-map", "0:s?",
             "-c:v", "hevc_qsv",
             "-global_quality", str(icq),
-            "-c:a", "eac3",
-            "-b:a", "640k",
+            *audio_args,
             "-c:s", "copy",
             "-progress", "pipe:1",
             temp_out
@@ -440,6 +472,7 @@ class TranscodeQueueManager:
 
         logger.info(f"Starting transcode of {orig_path} -> {temp_out}")
         start_time = time.time()
+        stderr_lines = collections.deque(maxlen=50)
 
         try:
             process = subprocess.Popen(
@@ -452,6 +485,17 @@ class TranscodeQueueManager:
             )
             self._active_process = process
 
+            # Drain stderr asynchronously to prevent pipe buffer exhaustion deadlocks on Windows
+            def drain_stderr():
+                try:
+                    for err_line in process.stderr:
+                        stderr_lines.append(err_line)
+                except Exception:
+                    pass
+
+            stderr_thread = threading.Thread(target=drain_stderr, daemon=True)
+            stderr_thread.start()
+
             # Parse progress pipe
             for line in process.stdout:
                 if self.cancel_current_flag:
@@ -459,33 +503,50 @@ class TranscodeQueueManager:
                     break
 
                 line = line.strip()
-                if "=" in line:
-                    k, v = line.split("=", 1)
-                    k = k.strip()
-                    v = v.strip()
+                if not line or "=" not in line:
+                    continue
 
-                    if k == "out_time_ms":
+                k, v = line.split("=", 1)
+                k = k.strip()
+                v = v.strip()
+
+                cur_sec = None
+                if k in ("out_time_us", "out_time_ms"):
+                    try:
+                        ms = int(v)
+                        cur_sec = ms / 1_000_000.0
+                        job.out_time_ms = ms
+                    except Exception:
+                        pass
+                elif k == "out_time":
+                    if v and v != "N/A" and ":" in v:
                         try:
-                            ms = int(v)
-                            job.out_time_ms = ms
-                            cur_sec = ms / 1_000_000.0
-                            if total_duration_sec > 0:
-                                job.progress_pct = min(99.0, (cur_sec / total_duration_sec) * 100.0)
-                                elapsed = time.time() - start_time
-                                if cur_sec > 0 and elapsed > 0:
-                                    speed = cur_sec / elapsed
-                                    job.current_speed = f"{speed:.1f}x"
-                                    rem_sec = (total_duration_sec - cur_sec) / speed if speed > 0 else 0
-                                    job.eta_seconds = max(0, int(rem_sec))
+                            parts = v.split(":")
+                            if len(parts) == 3:
+                                cur_sec = float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
                         except Exception:
                             pass
-                    elif k == "fps":
-                        try:
-                            job.current_fps = float(v)
-                        except Exception:
-                            pass
+                elif k == "fps":
+                    try:
+                        job.current_fps = float(v)
+                    except Exception:
+                        pass
+                elif k == "speed":
+                    if v and v != "N/A":
+                        job.current_speed = v
+
+                if cur_sec is not None and cur_sec >= 0 and total_duration_sec > 0:
+                    job.progress_pct = min(99.0, max(0.0, (cur_sec / total_duration_sec) * 100.0))
+                    elapsed = time.time() - start_time
+                    if cur_sec > 0 and elapsed > 0:
+                        speed_val = cur_sec / elapsed
+                        if not job.current_speed or job.current_speed == "0.0x":
+                            job.current_speed = f"{speed_val:.1f}x"
+                        rem_sec = (total_duration_sec - cur_sec) / speed_val if speed_val > 0 else 0
+                        job.eta_seconds = max(0, int(rem_sec))
 
             process.wait()
+            stderr_thread.join(timeout=2.0)
             self._active_process = None
 
             if self.cancel_current_flag:
@@ -499,9 +560,9 @@ class TranscodeQueueManager:
                 return
 
             if process.returncode != 0:
-                err_text = process.stderr.read()[:500] if process.stderr else "Unknown error"
+                err_text = "".join(list(stderr_lines)[-15:]) if stderr_lines else "Unknown error"
                 job.status = "failed"
-                job.error_message = f"FFmpeg failed (code {process.returncode}): {err_text}"
+                job.error_message = f"FFmpeg failed (code {process.returncode}): {err_text[:400]}"
                 if os.path.exists(temp_out):
                     try:
                         os.remove(temp_out)
@@ -625,6 +686,8 @@ class TranscodeQueueManager:
 
         icq = QUALITY_PRESETS.get(self.quality_preset, QUALITY_PRESETS["balanced"])["icq"]
 
+        audio_args = get_optimal_audio_args(get_media_info(self.ffprobe_path, file_path))
+
         # Jump 2 minutes in to avoid opening black frames/logos
         cmd = [
             self.ffmpeg_path,
@@ -638,8 +701,7 @@ class TranscodeQueueManager:
             "-map", "0:s?",
             "-c:v", "hevc_qsv",
             "-global_quality", str(icq),
-            "-c:a", "eac3",
-            "-b:a", "640k",
+            *audio_args,
             "-c:s", "copy",
             preview_out
         ]
