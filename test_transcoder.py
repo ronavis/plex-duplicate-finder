@@ -68,5 +68,39 @@ class TestTranscoder(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("not created", msg)
 
+    def test_encoder_detection_and_selection(self):
+        encoders = self.mgr.available_encoders
+        self.assertGreater(len(encoders), 0, "At least one encoder should be detected")
+        enc_ids = [e["id"] for e in encoders]
+        self.assertIn("hevc_qsv", enc_ids, "Intel hevc_qsv should be detected")
+        self.assertIn("libx264", enc_ids, "CPU libx264 should be detected")
+
+        # Test selecting different encoder
+        res = self.mgr.update_settings(encoder="libx264")
+        self.assertEqual(res["selected_encoder"], "libx264")
+        self.assertEqual(self.mgr.selected_encoder, "libx264")
+
+        # Status should reflect active encoder
+        st = self.mgr.get_status()
+        self.assertEqual(st["selected_encoder"], "libx264")
+        self.assertEqual(st["encoder_info"]["id"], "libx264")
+
+        # Switch back to hevc_qsv
+        res2 = self.mgr.update_settings(encoder="hevc_qsv")
+        self.assertEqual(res2["selected_encoder"], "hevc_qsv")
+
+    def test_encoder_video_args_generation(self):
+        flags, codec = transcoder.get_encoder_video_args("hevc_qsv", "balanced")
+        self.assertEqual(codec, "hevc")
+        self.assertIn("hevc_qsv", flags)
+
+        flags_h264, codec_h264 = transcoder.get_encoder_video_args("h264_qsv", "balanced")
+        self.assertEqual(codec_h264, "h264")
+        self.assertIn("h264_qsv", flags_h264)
+
+        flags_x265, codec_x265 = transcoder.get_encoder_video_args("libx265", "max_savings")
+        self.assertEqual(codec_x265, "hevc")
+        self.assertIn("libx265", flags_x265)
+
 if __name__ == "__main__":
     unittest.main()

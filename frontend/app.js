@@ -3080,6 +3080,8 @@ const btnQueueSkip = document.getElementById('btn-queue-skip');
 const btnQueueClear = document.getElementById('btn-queue-clear');
 const selectTranscodeSafety = document.getElementById('select-transcode-safety');
 const selectTranscodePreset = document.getElementById('select-transcode-preset');
+const selectTranscodeEncoder = document.getElementById('select-transcode-encoder');
+const optHardwareBadge = document.getElementById('opt-hardware-badge');
 const queueTotalReclaimed = document.getElementById('queue-total-reclaimed');
 const queueItemsTbody = document.getElementById('queue-items-tbody');
 
@@ -3097,6 +3099,7 @@ const testStatSavingsPct = document.getElementById('test-stat-savings-pct');
 const testStatReclaimed = document.getElementById('test-stat-reclaimed');
 const testStatSpeed = document.getElementById('test-stat-speed');
 const testStatTime = document.getElementById('test-stat-time');
+const testModalDesc = document.getElementById('test-modal-desc');
 const testVideoPlayer = document.getElementById('test-video-player');
 
 function initTranscodeQueueUI() {
@@ -3183,6 +3186,24 @@ function initTranscodeQueueUI() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ quality_preset: e.target.value })
       });
+    });
+  }
+
+  if (selectTranscodeEncoder) {
+    selectTranscodeEncoder.addEventListener('change', async (e) => {
+      const selected = e.target.value;
+      try {
+        await fetch('/api/transcode/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ encoder: selected })
+        });
+        const optText = selectTranscodeEncoder.options[selectTranscodeEncoder.selectedIndex]?.text || selected;
+        showToast(`Video encoder switched to: ${optText}`);
+        fetchTranscodeStatus();
+      } catch (err) {
+        console.warn('Error updating encoder setting:', err);
+      }
     });
   }
 
@@ -3280,6 +3301,39 @@ async function fetchTranscodeStatus() {
     }
     if (selectTranscodePreset && data.quality_preset) {
       selectTranscodePreset.value = data.quality_preset;
+    }
+
+    // Update Encoders Dropdown & Top Badge
+    if (data.available_encoders && data.available_encoders.length > 0) {
+      if (selectTranscodeEncoder) {
+        const currentIds = Array.from(selectTranscodeEncoder.options).map(o => o.value).join(',');
+        const newIds = data.available_encoders.map(e => e.id).join(',');
+        if (currentIds !== newIds) {
+          selectTranscodeEncoder.innerHTML = data.available_encoders.map(enc => {
+            const label = enc.badge || enc.name;
+            return `<option value="${enc.id}">${label}</option>`;
+          }).join('');
+        }
+        if (data.selected_encoder) {
+          selectTranscodeEncoder.value = data.selected_encoder;
+        }
+      }
+
+      if (optHardwareBadge) {
+        const activeEnc = data.encoder_info || data.available_encoders.find(e => e.id === data.selected_encoder) || data.available_encoders[0];
+        const activeLabel = activeEnc.badge || activeEnc.name;
+        optHardwareBadge.textContent = activeLabel;
+        optHardwareBadge.title = `Active: ${activeEnc.name}\nDetected on Host: ${data.available_encoders.map(e => e.name).join(', ')}`;
+        if (activeEnc.is_hardware) {
+          optHardwareBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+          optHardwareBadge.style.color = '#10B981';
+          optHardwareBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+        } else {
+          optHardwareBadge.style.background = 'rgba(59, 130, 246, 0.15)';
+          optHardwareBadge.style.color = '#60A5FA';
+          optHardwareBadge.style.borderColor = 'rgba(59, 130, 246, 0.3)';
+        }
+      }
     }
 
     // Update Active Banner
@@ -3423,18 +3477,19 @@ window.removeQueueJob = async function(jobId) {
 
 window.runOptimizerTest = async function(title) {
   currentTestingTitle = title;
-  showToast(`Running 60-second Intel QSV test transcode on "${title}"...`);
+  const activeEncoder = selectTranscodeEncoder ? selectTranscodeEncoder.value : undefined;
+  showToast(`Running test transcode snippet on "${title}"...`);
   
   try {
     const res = await fetch('/api/transcode/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, duration_sec: 60 })
+      body: JSON.stringify({ title, duration_sec: 15, encoder: activeEncoder })
     });
     const data = await res.json();
 
     if (data.status === 'ok') {
-      if (testModalTitle) testModalTitle.textContent = `Intel QuickSync Test Preview: ${data.filename}`;
+      if (testModalTitle) testModalTitle.textContent = `${data.hardware || 'Transcode'} Preview: ${data.filename}`;
       if (testStatOrigBitrate) testStatOrigBitrate.textContent = `${data.orig_bitrate_kbps} kbps`;
       if (testStatOrigSize) testStatOrigSize.textContent = `Original: ${data.orig_size_human}`;
       if (testStatNewBitrate) testStatNewBitrate.textContent = `${data.new_bitrate_kbps} kbps`;
@@ -3442,7 +3497,8 @@ window.runOptimizerTest = async function(title) {
       if (testStatSavingsPct) testStatSavingsPct.textContent = `-${data.savings_pct}%`;
       if (testStatReclaimed) testStatReclaimed.textContent = `Reclaims ~${data.reclaimed_estimate_human}`;
       if (testStatSpeed) testStatSpeed.textContent = data.effective_speed;
-      if (testStatTime) testStatTime.textContent = `60s clip processed in ${data.encoding_time_sec}s`;
+      if (testStatTime) testStatTime.textContent = `${data.test_duration_sec}s clip processed in ${data.encoding_time_sec}s`;
+      if (testModalDesc) testModalDesc.textContent = `Play ${data.test_duration_sec}-Second Preview (${data.hardware || 'Transcoded'}):`;
 
       if (testVideoPlayer) {
         testVideoPlayer.src = `${data.preview_url}?t=${Date.now()}`;
@@ -3454,7 +3510,7 @@ window.runOptimizerTest = async function(title) {
         modalOptimizerTest.classList.remove('hidden');
       }
     } else {
-      alert('Test transcode failed: ' + (data.message || 'Unknown error'));
+      alert('Test transcode notice: ' + (data.message || 'Unknown error during test transcode.'));
     }
   } catch (e) {
     alert('Error running test transcode: ' + e.message);

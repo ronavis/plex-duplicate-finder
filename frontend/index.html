@@ -747,7 +747,7 @@
           <div class="modal-title">
             <span style="color: #10B981; font-size: 1.3rem;">🚀</span>
             <h3>Space Optimization Advisor &amp; Savings Analyzer</h3>
-            <span class="badge badge-accent" style="margin-left: 10px; background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3);">
+            <span id="opt-hardware-badge" class="badge badge-accent" style="margin-left: 10px; background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3);">
               ⚡ Intel(R) N150 QSV Hardware Detected
             </span>
           </div>
@@ -974,19 +974,29 @@
 
               <div class="queue-settings-group">
                 <div class="sort-wrapper">
-                  <label for="select-transcode-safety">Safety Mode:</label>
-                  <select id="select-transcode-safety" class="input-control select-control" style="width: auto;">
-                    <option value="recycle_bin">Recycle Bin (Safe Staging)</option>
-                    <option value="direct_replace">Direct In-Place Replace</option>
+                  <label for="select-transcode-encoder">Encoder:</label>
+                  <select id="select-transcode-encoder" class="input-control select-control" style="width: auto; min-width: 170px;">
+                    <option value="hevc_qsv">⚡ Intel QuickSync HEVC (Hardware)</option>
+                    <option value="h264_qsv">⚡ Intel QuickSync H.264 (Hardware)</option>
+                    <option value="libx265">💻 CPU Software x265 (HEVC)</option>
+                    <option value="libx264">💻 CPU Software x264 (AVC)</option>
                   </select>
                 </div>
 
                 <div class="sort-wrapper">
                   <label for="select-transcode-preset">Quality Preset:</label>
                   <select id="select-transcode-preset" class="input-control select-control" style="width: auto;">
-                    <option value="balanced">Balanced (ICQ 23 - ~65% savings)</option>
-                    <option value="high_quality">High Quality (ICQ 20 - ~50% savings)</option>
-                    <option value="max_savings">Max Space Savings (ICQ 26 - ~75% savings)</option>
+                    <option value="balanced">Balanced (~65% savings)</option>
+                    <option value="high_quality">High Quality (~50% savings)</option>
+                    <option value="max_savings">Max Space Savings (~75% savings)</option>
+                  </select>
+                </div>
+
+                <div class="sort-wrapper">
+                  <label for="select-transcode-safety">Safety Mode:</label>
+                  <select id="select-transcode-safety" class="input-control select-control" style="width: auto;">
+                    <option value="recycle_bin">Recycle Bin (Safe Staging)</option>
+                    <option value="direct_replace">Direct In-Place Replace</option>
                   </select>
                 </div>
               </div>
@@ -1062,8 +1072,8 @@
           </div>
 
           <div style="margin-top: 14px;">
-            <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">
-              Play 60-Second Transcoded Clip (10-bit HEVC + E-AC-3):
+            <div id="test-modal-desc" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">
+              Play Transcoded Preview Clip:
             </div>
             <video id="test-video-player" controls style="width: 100%; max-height: 360px; border-radius: var(--radius-sm); background: #000; outline: none;"></video>
           </div>

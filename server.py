@@ -708,12 +708,14 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
         elif path == "/api/transcode/settings":
             safety = body.get("safety_mode")
             preset = body.get("quality_preset")
-            res = transcoder.transcode_manager.update_settings(safety, preset)
+            encoder = body.get("encoder")
+            res = transcoder.transcode_manager.update_settings(safety, preset, encoder)
             self._send_json(200, res)
 
         elif path == "/api/transcode/test":
             file_path = body.get("file_path", "")
             title = body.get("title", "")
+            encoder = body.get("encoder")
             if not file_path and title:
                 files = optimizer.space_optimizer.get_files_for_title(title)
                 if files:
@@ -721,9 +723,12 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
             if not file_path:
                 self._send_json(400, {"status": "error", "message": "No file found to test."})
             else:
-                dur = int(body.get("duration_sec", 60))
-                res = transcoder.transcode_manager.run_test_transcode(file_path, dur)
-                self._send_json(200 if res.get("status") == "ok" else 500, res)
+                try:
+                    dur = int(body.get("duration_sec", 15))
+                    res = transcoder.transcode_manager.run_test_transcode(file_path, dur, encoder=encoder)
+                    self._send_json(200 if res.get("status") == "ok" else 500, res)
+                except Exception as e:
+                    self._send_json(500, {"status": "error", "message": f"Test transcode error: {str(e)}"})
 
         else:
             self._send_json(404, {"status": "not_found"})

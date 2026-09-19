@@ -22,12 +22,215 @@ logger = logging.getLogger("Transcoder")
 QUEUE_STATE_FILE = "transcode_queue.json"
 TEST_PREVIEW_FILE = os.path.join("scratch", "preview_test.mkv")
 
-# Quality Presets for hevc_qsv (global_quality ICQ)
-QUALITY_PRESETS = {
-    "high_quality": {"icq": 20, "label": "High Quality (ICQ 20 - ~45-55% savings)"},
-    "balanced": {"icq": 23, "label": "Balanced / Recommended (ICQ 23 - ~60-70% savings)"},
-    "max_savings": {"icq": 26, "label": "Max Space Savings (ICQ 26 - ~70-80% savings)"}
-}
+# Video Encoder Definitions & Profiles
+ENCODER_DEFINITIONS = [
+    {
+        "id": "hevc_qsv",
+        "name": "Intel QuickSync HEVC (Hardware - Recommended)",
+        "badge": "⚡ Intel QSV HEVC (Hardware)",
+        "codec": "hevc",
+        "is_hardware": True,
+        "vendor": "Intel",
+        "description": "Ultra-fast hardware HEVC compression. ~60-75% space reduction at 150-300+ FPS.",
+        "presets": {
+            "high_quality": {"flags": ["-c:v", "hevc_qsv", "-global_quality", "20"], "label": "High Quality (ICQ 20 - ~50% savings)"},
+            "balanced": {"flags": ["-c:v", "hevc_qsv", "-global_quality", "23"], "label": "Balanced / Recommended (ICQ 23 - ~65% savings)"},
+            "max_savings": {"flags": ["-c:v", "hevc_qsv", "-global_quality", "26"], "label": "Max Space Savings (ICQ 26 - ~75% savings)"}
+        }
+    },
+    {
+        "id": "h264_qsv",
+        "name": "Intel QuickSync H.264 (Hardware - Max Compatibility)",
+        "badge": "⚡ Intel QSV H.264 (Hardware)",
+        "codec": "h264",
+        "is_hardware": True,
+        "vendor": "Intel",
+        "description": "Hardware accelerated H.264. Fast encoding with 100% universal playback compatibility.",
+        "presets": {
+            "high_quality": {"flags": ["-c:v", "h264_qsv", "-global_quality", "21"], "label": "High Quality (ICQ 21 - ~35% savings)"},
+            "balanced": {"flags": ["-c:v", "h264_qsv", "-global_quality", "24"], "label": "Balanced (ICQ 24 - ~45% savings)"},
+            "max_savings": {"flags": ["-c:v", "h264_qsv", "-global_quality", "27"], "label": "Max Space Savings (ICQ 27 - ~55% savings)"}
+        }
+    },
+    {
+        "id": "hevc_nvenc",
+        "name": "NVIDIA NVENC HEVC (Hardware)",
+        "badge": "⚡ NVIDIA NVENC HEVC (Hardware)",
+        "codec": "hevc",
+        "is_hardware": True,
+        "vendor": "NVIDIA",
+        "description": "NVIDIA GeForce/RTX GPU hardware encoding. High speed HEVC compression.",
+        "presets": {
+            "high_quality": {"flags": ["-c:v", "hevc_nvenc", "-rc", "vbr", "-cq", "20", "-preset", "p5"], "label": "High Quality (CQ 20 - ~50% savings)"},
+            "balanced": {"flags": ["-c:v", "hevc_nvenc", "-rc", "vbr", "-cq", "24", "-preset", "p5"], "label": "Balanced (CQ 24 - ~65% savings)"},
+            "max_savings": {"flags": ["-c:v", "hevc_nvenc", "-rc", "vbr", "-cq", "28", "-preset", "p5"], "label": "Max Space Savings (CQ 28 - ~75% savings)"}
+        }
+    },
+    {
+        "id": "h264_nvenc",
+        "name": "NVIDIA NVENC H.264 (Hardware)",
+        "badge": "⚡ NVIDIA NVENC H.264 (Hardware)",
+        "codec": "h264",
+        "is_hardware": True,
+        "vendor": "NVIDIA",
+        "description": "NVIDIA GeForce/RTX GPU hardware H.264 encoding.",
+        "presets": {
+            "high_quality": {"flags": ["-c:v", "h264_nvenc", "-rc", "vbr", "-cq", "20", "-preset", "p5"], "label": "High Quality (CQ 20 - ~35% savings)"},
+            "balanced": {"flags": ["-c:v", "h264_nvenc", "-rc", "vbr", "-cq", "24", "-preset", "p5"], "label": "Balanced (CQ 24 - ~45% savings)"},
+            "max_savings": {"flags": ["-c:v", "h264_nvenc", "-rc", "vbr", "-cq", "28", "-preset", "p5"], "label": "Max Space Savings (CQ 28 - ~55% savings)"}
+        }
+    },
+    {
+        "id": "hevc_amf",
+        "name": "AMD AMF HEVC (Hardware)",
+        "badge": "⚡ AMD AMF HEVC (Hardware)",
+        "codec": "hevc",
+        "is_hardware": True,
+        "vendor": "AMD",
+        "description": "AMD Radeon AMF hardware HEVC encoder.",
+        "presets": {
+            "high_quality": {"flags": ["-c:v", "hevc_amf", "-rc", "cqp", "-qp_i", "20", "-qp_p", "20", "-quality", "quality"], "label": "High Quality (QP 20 - ~50% savings)"},
+            "balanced": {"flags": ["-c:v", "hevc_amf", "-rc", "cqp", "-qp_i", "24", "-qp_p", "24", "-quality", "balanced"], "label": "Balanced (QP 24 - ~65% savings)"},
+            "max_savings": {"flags": ["-c:v", "hevc_amf", "-rc", "cqp", "-qp_i", "28", "-qp_p", "28", "-quality", "speed"], "label": "Max Space Savings (QP 28 - ~75% savings)"}
+        }
+    },
+    {
+        "id": "h264_amf",
+        "name": "AMD AMF H.264 (Hardware)",
+        "badge": "⚡ AMD AMF H.264 (Hardware)",
+        "codec": "h264",
+        "is_hardware": True,
+        "vendor": "AMD",
+        "description": "AMD Radeon AMF hardware H.264 encoder.",
+        "presets": {
+            "high_quality": {"flags": ["-c:v", "h264_amf", "-rc", "cqp", "-qp_i", "20", "-qp_p", "20", "-quality", "quality"], "label": "High Quality (QP 20 - ~35% savings)"},
+            "balanced": {"flags": ["-c:v", "h264_amf", "-rc", "cqp", "-qp_i", "24", "-qp_p", "24", "-quality", "balanced"], "label": "Balanced (QP 24 - ~45% savings)"},
+            "max_savings": {"flags": ["-c:v", "h264_amf", "-rc", "cqp", "-qp_i", "28", "-qp_p", "28", "-quality", "speed"], "label": "Max Space Savings (QP 28 - ~55% savings)"}
+        }
+    },
+    {
+        "id": "libx265",
+        "name": "CPU Software x265 (High Efficiency)",
+        "badge": "💻 CPU Software x265",
+        "codec": "hevc",
+        "is_hardware": False,
+        "vendor": "Software",
+        "description": "Pure CPU software HEVC encoder. Pristine visual quality, higher CPU utilization (~10-25 FPS).",
+        "presets": {
+            "high_quality": {"flags": ["-c:v", "libx265", "-crf", "20", "-preset", "medium"], "label": "High Quality (CRF 20 - ~50% savings)"},
+            "balanced": {"flags": ["-c:v", "libx265", "-crf", "24", "-preset", "medium"], "label": "Balanced (CRF 24 - ~65% savings)"},
+            "max_savings": {"flags": ["-c:v", "libx265", "-crf", "28", "-preset", "medium"], "label": "Max Space Savings (CRF 28 - ~75% savings)"}
+        }
+    },
+    {
+        "id": "libx264",
+        "name": "CPU Software x264 (Universal Compatibility)",
+        "badge": "💻 CPU Software x264",
+        "codec": "h264",
+        "is_hardware": False,
+        "vendor": "Software",
+        "description": "Standard CPU software H.264 encoder. Universal compatibility across all platforms.",
+        "presets": {
+            "high_quality": {"flags": ["-c:v", "libx264", "-crf", "19", "-preset", "medium"], "label": "High Quality (CRF 19 - ~35% savings)"},
+            "balanced": {"flags": ["-c:v", "libx264", "-crf", "22", "-preset", "medium"], "label": "Balanced (CRF 22 - ~45% savings)"},
+            "max_savings": {"flags": ["-c:v", "libx264", "-crf", "26", "-preset", "medium"], "label": "Max Space Savings (CRF 26 - ~55% savings)"}
+        }
+    }
+]
+
+# Legacy dictionary for backward compatibility
+QUALITY_PRESETS = ENCODER_DEFINITIONS[0]["presets"]
+
+
+_CACHED_AVAILABLE_ENCODERS: Optional[List[Dict[str, Any]]] = None
+
+
+def detect_available_encoders(ffmpeg_path: Optional[str], force_refresh: bool = False) -> List[Dict[str, Any]]:
+    """Actively probe FFmpeg to detect all functional hardware and software video encoders on this host."""
+    global _CACHED_AVAILABLE_ENCODERS
+    if _CACHED_AVAILABLE_ENCODERS is not None and not force_refresh:
+        return _CACHED_AVAILABLE_ENCODERS
+
+    if not ffmpeg_path or not os.path.exists(ffmpeg_path):
+        return []
+    
+    available = []
+    for enc_def in ENCODER_DEFINITIONS:
+        enc_id = enc_def["id"]
+        cmd = [
+            ffmpeg_path, "-y",
+            "-f", "lavfi", "-i", "color=c=black:s=64x64:d=0.04",
+            "-c:v", enc_id,
+            "-frames:v", "1",
+            "-f", "null", "-"
+        ]
+        try:
+            proc = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=5
+            )
+            if proc.returncode == 0:
+                available.append({
+                    "id": enc_def["id"],
+                    "name": enc_def["name"],
+                    "badge": enc_def["badge"],
+                    "codec": enc_def["codec"],
+                    "is_hardware": enc_def["is_hardware"],
+                    "vendor": enc_def["vendor"],
+                    "description": enc_def["description"]
+                })
+        except Exception as e:
+            logger.debug(f"Encoder probe failed for {enc_id}: {e}")
+
+    # Fallback to software x264/x265 if probe was empty
+    if not available:
+        available.append({
+            "id": "libx264",
+            "name": "CPU Software x264 (Universal Compatibility)",
+            "badge": "💻 CPU Software x264",
+            "codec": "h264",
+            "is_hardware": False,
+            "vendor": "Software",
+            "description": "Standard CPU software H.264 encoder."
+        })
+    _CACHED_AVAILABLE_ENCODERS = available
+    return available
+
+
+def get_default_encoder(available: List[Dict[str, Any]]) -> str:
+    """Select the best encoder by priority: Hardware HEVC -> Hardware H.264 -> Software HEVC -> Software H.264."""
+    for enc in available:
+        if enc["is_hardware"] and enc["codec"] == "hevc":
+            return enc["id"]
+    for enc in available:
+        if enc["is_hardware"]:
+            return enc["id"]
+    for enc in available:
+        if enc["id"] == "libx265":
+            return enc["id"]
+    return available[0]["id"] if available else "hevc_qsv"
+
+
+def get_encoder_video_args(encoder_id: str, preset_name: str) -> Tuple[List[str], str]:
+    """Return the FFmpeg video flags and target codec name for an encoder and quality preset."""
+    enc_def = next((e for e in ENCODER_DEFINITIONS if e["id"] == encoder_id), None)
+    if not enc_def:
+        enc_def = ENCODER_DEFINITIONS[0]
+    target_codec = enc_def["codec"]
+    preset_dict = enc_def["presets"].get(preset_name, enc_def["presets"].get("balanced"))
+    if not preset_dict:
+        preset_dict = enc_def["presets"]["balanced"]
+    return list(preset_dict["flags"]), target_codec
+
+
+def get_encoder_global_args(encoder_id: str) -> List[str]:
+    """Return device init flags if required by the encoder."""
+    if encoder_id.endswith("_qsv"):
+        return ["-init_hw_device", "qsv=hw"]
+    return []
 
 
 def find_binaries() -> Tuple[Optional[str], Optional[str]]:
@@ -222,7 +425,9 @@ class TranscodeQueueManager:
         self.total_failed_count = 0
 
         self.ffmpeg_path, self.ffprobe_path = find_binaries()
-        self.has_qsv = check_qsv_support(self.ffmpeg_path) if self.ffmpeg_path else False
+        self.available_encoders = detect_available_encoders(self.ffmpeg_path)
+        self.selected_encoder = get_default_encoder(self.available_encoders)
+        self.has_qsv = any(e["id"].endswith("_qsv") for e in self.available_encoders)
 
         self._lock = threading.Lock()
         self._worker_thread: Optional[threading.Thread] = None
@@ -241,6 +446,9 @@ class TranscodeQueueManager:
                 self.quality_preset = data.get("quality_preset", "balanced")
                 self.total_reclaimed_bytes = data.get("total_reclaimed_bytes", 0)
                 self.total_completed_count = data.get("total_completed_count", 0)
+                saved_enc = data.get("selected_encoder")
+                if saved_enc and any(e["id"] == saved_enc for e in self.available_encoders):
+                    self.selected_encoder = saved_enc
 
                 for item in data.get("queue", []):
                     job = TranscodeJob(
@@ -271,6 +479,7 @@ class TranscodeQueueManager:
                 json.dump({
                     "safety_mode": self.safety_mode,
                     "quality_preset": self.quality_preset,
+                    "selected_encoder": self.selected_encoder,
                     "total_reclaimed_bytes": self.total_reclaimed_bytes,
                     "total_completed_count": self.total_completed_count,
                     "queue": [j.to_dict() for j in self.queue]
@@ -279,11 +488,12 @@ class TranscodeQueueManager:
             logger.warning(f"Error saving queue state: {e}")
 
     def get_status(self) -> Dict[str, Any]:
-        """Return live status of the transcode engine and queue."""
+        """Return live status of the transcode engine, encoders, and queue."""
         with self._lock:
             pending_count = len([j for j in self.queue if j.status == "pending"])
             completed_count = len([j for j in self.queue if j.status == "completed"])
             failed_count = len([j for j in self.queue if j.status == "failed"])
+            active_enc_info = next((e for e in self.available_encoders if e["id"] == self.selected_encoder), None)
 
             return {
                 "status": "ok",
@@ -292,9 +502,11 @@ class TranscodeQueueManager:
                 "has_ffmpeg": bool(self.ffmpeg_path),
                 "has_qsv": self.has_qsv,
                 "ffmpeg_path": self.ffmpeg_path,
+                "available_encoders": self.available_encoders,
+                "selected_encoder": self.selected_encoder,
+                "encoder_info": active_enc_info,
                 "safety_mode": self.safety_mode,
                 "quality_preset": self.quality_preset,
-                "quality_info": QUALITY_PRESETS.get(self.quality_preset, QUALITY_PRESETS["balanced"]),
                 "active_job": self.active_job.to_dict() if self.active_job else None,
                 "queue_counts": {
                     "total": len(self.queue),
@@ -375,18 +587,26 @@ class TranscodeQueueManager:
                     return {"status": "ok", "message": f"Job reset to pending: {j.filename}"}
         return {"status": "error", "message": "Job not found in queue."}
 
-    def update_settings(self, safety_mode: Optional[str] = None, quality_preset: Optional[str] = None) -> Dict[str, Any]:
+    def update_settings(
+        self,
+        safety_mode: Optional[str] = None,
+        quality_preset: Optional[str] = None,
+        encoder: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Update transcode configuration settings."""
         with self._lock:
             if safety_mode in ["recycle_bin", "direct_replace"]:
                 self.safety_mode = safety_mode
-            if quality_preset in QUALITY_PRESETS:
+            if quality_preset in ["high_quality", "balanced", "max_savings"]:
                 self.quality_preset = quality_preset
+            if encoder and any(e["id"] == encoder for e in self.available_encoders):
+                self.selected_encoder = encoder
             self._save_state()
         return {
             "status": "ok",
             "safety_mode": self.safety_mode,
-            "quality_preset": self.quality_preset
+            "quality_preset": self.quality_preset,
+            "selected_encoder": self.selected_encoder
         }
 
     def start_queue(self) -> Dict[str, Any]:
@@ -490,26 +710,27 @@ class TranscodeQueueManager:
             except Exception:
                 total_duration_sec = 0.0
 
-        # 2. Build FFmpeg command with smart audio handling
+        # 2. Build FFmpeg command with chosen encoder and smart audio handling
         audio_args = get_optimal_audio_args(source_meta)
-        icq = QUALITY_PRESETS.get(self.quality_preset, QUALITY_PRESETS["balanced"])["icq"]
+        video_args, target_codec = get_encoder_video_args(self.selected_encoder, self.quality_preset)
+        global_args = get_encoder_global_args(self.selected_encoder)
+
         cmd = [
             self.ffmpeg_path,
             "-y",
-            "-init_hw_device", "qsv=hw",
+            *global_args,
             "-i", orig_path,
             "-map", "0:v:0",
             "-map", "0:a?",
             "-map", "0:s?",
-            "-c:v", "hevc_qsv",
-            "-global_quality", str(icq),
+            *video_args,
             *audio_args,
             "-c:s", "copy",
             "-progress", "pipe:1",
             temp_out
         ]
 
-        logger.info(f"Starting transcode of {orig_path} -> {temp_out}")
+        logger.info(f"Starting transcode of {orig_path} -> {temp_out} using {self.selected_encoder}")
         start_time = time.time()
         stderr_lines = collections.deque(maxlen=50)
 
@@ -613,7 +834,7 @@ class TranscodeQueueManager:
                 return
 
             # 3. Integrity Verification Gate
-            is_valid, verify_msg = self._verify_integrity(orig_path, temp_out, total_duration_sec)
+            is_valid, verify_msg = self._verify_integrity(orig_path, temp_out, total_duration_sec, target_codec=target_codec)
             if not is_valid:
                 job.status = "failed"
                 job.error_message = f"Verification failed: {verify_msg}"
@@ -661,7 +882,7 @@ class TranscodeQueueManager:
                 except Exception:
                     pass
 
-    def _verify_integrity(self, orig_path: str, temp_out: str, expected_duration: float) -> Tuple[bool, str]:
+    def _verify_integrity(self, orig_path: str, temp_out: str, expected_duration: float, target_codec: str = "hevc") -> Tuple[bool, str]:
         """Verify output file validity before modifying the original."""
         if not os.path.exists(temp_out):
             return False, "Output file was not created."
@@ -681,8 +902,11 @@ class TranscodeQueueManager:
         if not video_streams:
             return False, "No video stream found in output file."
 
-        if video_streams[0].get("codec_name") != "hevc":
-            return False, f"Video codec is not HEVC: {video_streams[0].get('codec_name')}"
+        vcodec = video_streams[0].get("codec_name", "").lower()
+        if target_codec == "hevc" and vcodec != "hevc":
+            return False, f"Video codec is not HEVC: {vcodec}"
+        elif target_codec == "h264" and vcodec not in ["h264", "avc"]:
+            return False, f"Video codec is not H.264: {vcodec}"
 
         # Check duration if expected
         if expected_duration > 5.0:
@@ -702,20 +926,29 @@ class TranscodeQueueManager:
                 return False, f"Could not stage original file: {msg}"
 
             # Rename temp file to target filename
-            # Note: if safe_delete_file renamed/moved original, the path is now free
-            # Standardize extension: if original was .mp4, rename to .mkv
             target_path = Path(orig_path).with_suffix(".mkv")
             shutil.move(temp_out, str(target_path))
             return True, "File safely replaced."
         except Exception as e:
             return False, f"Error in atomic replacement: {e}"
 
-    def run_test_transcode(self, file_path: str, duration_sec: int = 60) -> Dict[str, Any]:
-        """Run a fast 60-second test transcode snippet and return metrics for UI preview."""
+    def run_test_transcode(
+        self,
+        file_path: str,
+        duration_sec: int = 15,
+        encoder: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Run a fast test transcode snippet and return metrics for UI preview."""
         if not self.ffmpeg_path:
             return {"status": "error", "message": "FFmpeg not detected on system."}
         if not os.path.exists(file_path):
             return {"status": "error", "message": f"File not found: {file_path}"}
+
+        active_encoder = encoder if (encoder and any(e["id"] == encoder for e in self.available_encoders)) else self.selected_encoder
+        video_args, target_codec = get_encoder_video_args(active_encoder, self.quality_preset)
+        global_args = get_encoder_global_args(active_encoder)
+        enc_info = next((e for e in self.available_encoders if e["id"] == active_encoder), None)
+        enc_label = enc_info["name"] if enc_info else active_encoder
 
         os.makedirs("scratch", exist_ok=True)
         preview_out = TEST_PREVIEW_FILE
@@ -726,59 +959,40 @@ class TranscodeQueueManager:
             except Exception:
                 pass
 
-        icq = QUALITY_PRESETS.get(self.quality_preset, QUALITY_PRESETS["balanced"])["icq"]
-
         audio_args = get_optimal_audio_args(get_media_info(self.ffprobe_path, file_path))
 
-        # Jump 2 minutes in to avoid opening black frames/logos
-        test_dur = min(duration_sec, 30) if duration_sec > 0 else 30
+        test_dur = min(max(duration_sec, 5), 30) if duration_sec > 0 else 15
         cmd = [
             self.ffmpeg_path,
             "-y",
-            "-init_hw_device", "qsv=hw",
+            *global_args,
             "-ss", "00:02:00",
-            "-hwaccel", "qsv",
             "-i", file_path,
             "-t", str(test_dur),
             "-map", "0:v:0",
             "-map", "0:a?",
             "-map", "0:s?",
-            "-c:v", "hevc_qsv",
-            "-global_quality", str(icq),
+            *video_args,
             *audio_args,
             "-c:s", "copy",
             preview_out
         ]
 
         start_t = time.time()
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=180)
-        elapsed = time.time() - start_t
-
-        if proc.returncode != 0 or not os.path.exists(preview_out):
-            # Fallback without -hwaccel if container has non-qsv stream
-            cmd_fallback = [
-                self.ffmpeg_path,
-                "-y",
-                "-init_hw_device", "qsv=hw",
-                "-ss", "00:02:00",
-                "-i", file_path,
-                "-t", str(test_dur),
-                "-map", "0:v:0",
-                "-map", "0:a?",
-                "-map", "0:s?",
-                "-c:v", "hevc_qsv",
-                "-global_quality", str(icq),
-                *audio_args,
-                "-c:s", "copy",
-                preview_out
-            ]
-            start_t = time.time()
-            proc = subprocess.run(cmd_fallback, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=180)
+        try:
+            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=45)
             elapsed = time.time() - start_t
+        except subprocess.TimeoutExpired:
+            return {
+                "status": "error",
+                "message": f"Test transcode timed out after 45 seconds. The drive ({os.path.splitdrive(file_path)[0]}) may be spinning up, disconnected, or experiencing high I/O latency."
+            }
+        except Exception as e:
+            return {"status": "error", "message": f"Test transcode execution error: {str(e)}"}
 
         if proc.returncode != 0 or not os.path.exists(preview_out):
-            err = proc.stderr[:400] if proc.stderr else "Unknown error"
-            return {"status": "error", "message": f"Test transcode failed: {err}"}
+            err = proc.stderr[-400:] if proc.stderr else "Unknown error"
+            return {"status": "error", "message": f"Test transcode failed (code {proc.returncode}): {err}"}
 
         # Calculate snippet stats
         orig_info = get_media_info(self.ffprobe_path, file_path)
@@ -802,18 +1016,20 @@ class TranscodeQueueManager:
             "file_path": file_path,
             "filename": os.path.basename(file_path),
             "preview_url": "/api/transcode/preview_clip",
-            "test_duration_sec": duration_sec,
+            "test_duration_sec": test_dur,
             "encoding_time_sec": round(elapsed, 1),
-            "effective_speed": f"{(duration_sec / elapsed):.1f}x" if elapsed > 0 else "N/A",
+            "effective_speed": f"{(test_dur / elapsed):.1f}x" if elapsed > 0 else "N/A",
             "orig_bitrate_kbps": round(orig_bitrate / 1000),
             "new_bitrate_kbps": round(new_bitrate / 1000),
             "savings_pct": max(0.0, savings_pct),
             "orig_size_human": scanner.format_bytes(orig_sz),
             "projected_new_size_human": scanner.format_bytes(int(orig_sz * (1.0 - (savings_pct / 100.0)))) if savings_pct > 0 else scanner.format_bytes(orig_sz),
             "reclaimed_estimate_human": scanner.format_bytes(int(orig_sz * (savings_pct / 100.0))) if savings_pct > 0 else "0.00 B",
-            "hardware": "Intel QuickSync hevc_qsv (10-bit HEVC + E-AC-3)"
+            "encoder_id": active_encoder,
+            "hardware": enc_label
         }
 
 
 # Global singleton instance
 transcode_manager = TranscodeQueueManager()
+
