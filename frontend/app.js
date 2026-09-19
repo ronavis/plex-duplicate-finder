@@ -2966,7 +2966,7 @@ function renderOptimizerTable() {
 
     return `
       <tr>
-        <td>
+        <td style="text-align: left;">
           <div class="title-cell-wrap">
             <img class="title-poster-thumb" src="${posterUrl}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'38\\' height=\\'56\\' fill=\\'%23222\\'><rect width=\\'100%\\' height=\\'100%\\'/><text x=\\'50%\\' y=\\'50%\\' fill=\\'%23666\\' font-size=\\'18\\' dominant-baseline=\\'middle\\' text-anchor=\\'middle\\'>🎬</text></svg>'" alt="">
             <div class="title-info-meta">
@@ -2975,24 +2975,24 @@ function renderOptimizerTable() {
             </div>
           </div>
         </td>
-        <td>
+        <td style="text-align: left;">
           <span class="badge ${it.type === 'tv' ? 'badge-primary' : 'badge-accent'}">${it.type === 'tv' ? 'TV Series' : 'Movie'}</span>
         </td>
-        <td>
-          <div style="display: flex; flex-direction: column; gap: 3px;">
+        <td style="text-align: left;">
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 3px;">
             <span class="codec-pill ${vBadgeClass}">${escapeHtml(it.primary_video_codec)}</span>
             <span class="codec-pill codec-pill-audio">${escapeHtml(it.primary_audio_codec)}</span>
             ${it.is_remux ? '<span class="badge" style="font-size: 0.7rem; background: rgba(229,160,13,0.2); color: var(--plex-gold);">REMUX</span>' : ''}
           </div>
         </td>
-        <td style="text-align: right; font-weight: 600;">
+        <td style="text-align: left; font-weight: 600;">
           ${it.total_size_human}
         </td>
-        <td style="text-align: right; color: var(--text-secondary);">
+        <td style="text-align: left; color: var(--text-secondary);">
           ${it.projected_size_human}
         </td>
-        <td style="text-align: right;">
-          <div class="badge-reclaim">
+        <td style="text-align: left;">
+          <div class="badge-reclaim" style="align-items: flex-start;">
             <span class="badge-reclaim-amount">+${it.reclaimable_human}</span>
             <span class="badge-reclaim-pct">-${it.savings_pct}%</span>
           </div>
@@ -3329,7 +3329,7 @@ function renderQueueTable(queue) {
       const etaSub = j.eta_seconds > 0 ? ` &bull; ETA: ~${j.eta_human || formatEtaDuration(j.eta_seconds)}` : '';
       statusBadge = `<span class="badge badge-primary" style="background: rgba(229,160,13,0.2); color: var(--plex-gold);">⚡ Running (${j.progress_pct}%${etaSub})</span>`;
     } else if (j.status === 'failed') {
-      statusBadge = `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #EF4444;" title="${escapeHtml(j.error_message || '')}">✕ Failed</span>`;
+      statusBadge = `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #EF4444; cursor: pointer;" onclick="alert('Transcode Error Details:\\n\\nFile: ${escapeHtml(j.filename).replace(/'/g, "\\'")}\\n\\nError: ${escapeHtml(j.error_message || 'Unknown error').replace(/'/g, "\\'")}')" title="Click to view error details: ${escapeHtml(j.error_message || '')}">✕ Failed ℹ</span>`;
     } else if (j.status === 'cancelled') {
       statusBadge = `<span class="badge" style="background: rgba(156, 163, 175, 0.2); color: #9CA3AF;">Skipped</span>`;
     } else {
@@ -3338,7 +3338,7 @@ function renderQueueTable(queue) {
 
     return `
       <tr>
-        <td>
+        <td style="text-align: left;">
           <div class="title-cell-wrap">
             <div class="title-info-meta">
               <span class="title-main-name" title="${escapeHtml(j.filename)}">${escapeHtml(j.filename)}</span>
@@ -3346,25 +3346,47 @@ function renderQueueTable(queue) {
             </div>
           </div>
         </td>
-        <td><strong>${j.drive ? j.drive + ':' : '-'}</strong></td>
-        <td style="text-align: right; font-weight: 600;">${j.original_size_human}</td>
-        <td style="text-align: right; color: var(--text-secondary);">${j.status === 'completed' ? j.new_size_human : formatBytes(j.projected_size_bytes)}</td>
-        <td>
-          <div style="display: flex; flex-direction: column; gap: 4px;">
+        <td style="text-align: left;"><strong>${j.drive ? j.drive + ':' : '-'}</strong></td>
+        <td style="text-align: left; font-weight: 600;">${j.original_size_human}</td>
+        <td style="text-align: left; color: var(--text-secondary);">${j.status === 'completed' ? j.new_size_human : formatBytes(j.projected_size_bytes)}</td>
+        <td style="text-align: left;">
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px;">
             ${statusBadge}
-            ${j.status === 'running' ? `<div class="progress-bar-track" style="height: 4px;"><div class="progress-bar-fill" style="width: ${j.progress_pct}%; background: #10B981;"></div></div>` : ''}
+            ${j.status === 'running' ? `<div class="progress-bar-track" style="height: 4px; width: 100%;"><div class="progress-bar-fill" style="width: ${j.progress_pct}%; background: #10B981;"></div></div>` : ''}
           </div>
         </td>
         <td style="text-align: center;">
-          ${j.status === 'running' ? 
-            `<button type="button" class="btn btn-secondary btn-xs" onclick="fetch('/api/transcode/skip', {method:'POST'}).then(fetchTranscodeStatus)">Skip</button>` : 
-            `<button type="button" class="btn btn-secondary btn-xs" onclick="removeQueueJob('${j.id}')">✕</button>`
-          }
+          <div style="display: inline-flex; gap: 4px; justify-content: center;">
+            ${j.status === 'failed' ? `<button type="button" class="btn btn-secondary btn-xs" onclick="retryQueueJob('${j.id}')" title="Retry this job">🔄</button>` : ''}
+            ${j.status === 'running' ? 
+              `<button type="button" class="btn btn-secondary btn-xs" onclick="fetch('/api/transcode/skip', {method:'POST'}).then(fetchTranscodeStatus)">Skip</button>` : 
+              `<button type="button" class="btn btn-secondary btn-xs" onclick="removeQueueJob('${j.id}')" title="Remove from queue">✕</button>`
+            }
+          </div>
         </td>
       </tr>
     `;
   }).join('');
 }
+
+window.retryQueueJob = async function(jobId) {
+  try {
+    const res = await fetch('/api/transcode/queue/retry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_id: jobId })
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      showToast('Job reset to pending.');
+      fetchTranscodeStatus();
+    } else {
+      alert(data.message || 'Failed to retry job.');
+    }
+  } catch (e) {
+    alert('Error retrying job: ' + e.message);
+  }
+};
 
 window.queueOptimizerTitle = async function(title) {
   try {

@@ -360,6 +360,21 @@ class TranscodeQueueManager:
             self._save_state()
         return {"status": "ok", "message": "Queue cleared."}
 
+    def retry_job(self, job_id: str) -> Dict[str, Any]:
+        """Reset a failed or cancelled job back to pending status."""
+        with self._lock:
+            for j in self.queue:
+                if j.id == job_id:
+                    j.status = "pending"
+                    j.error_message = None
+                    j.progress_pct = 0.0
+                    j.current_fps = 0.0
+                    j.current_speed = "0.0x"
+                    j.eta_seconds = 0
+                    self._save_state()
+                    return {"status": "ok", "message": f"Job reset to pending: {j.filename}"}
+        return {"status": "error", "message": "Job not found in queue."}
+
     def update_settings(self, safety_mode: Optional[str] = None, quality_preset: Optional[str] = None) -> Dict[str, Any]:
         """Update transcode configuration settings."""
         with self._lock:
@@ -446,9 +461,17 @@ class TranscodeQueueManager:
     def _process_single_job(self, job: TranscodeJob):
         """Execute FFmpeg transcoding on an individual file with verification."""
         orig_path = job.file_path
-        if not os.path.exists(orig_path):
+        try:
+            if not os.path.exists(orig_path):
+                job.status = "failed"
+                job.error_message = f"File not found on drive {job.drive}: ({job.filename})"
+                return
+        except OSError as e:
             job.status = "failed"
-            job.error_message = "Source file no longer exists."
+            if getattr(e, 'winerror', None) == 1117 or "I/O device error" in str(e):
+                job.error_message = f"Drive I/O error on {job.drive}: (WinError 1117). External USB drive may need reconnecting or checking."
+            else:
+                job.error_message = f"Drive access error on {job.drive}: {str(e)}"
             return
 
         temp_out = orig_path + ".tmp_opt.mkv"
@@ -578,7 +601,10 @@ class TranscodeQueueManager:
             if process.returncode != 0:
                 err_text = "".join(list(stderr_lines)[-15:]) if stderr_lines else "Unknown error"
                 job.status = "failed"
-                job.error_message = f"FFmpeg failed (code {process.returncode}): {err_text[:400]}"
+                if process.returncode in (4294967274, -22) or "I/O error" in err_text or "Input/output error" in err_text:
+                    job.error_message = f"Drive I/O interruption on {job.drive}: (USB read/write latency timeout or disconnect)."
+                else:
+                    job.error_message = f"FFmpeg failed (code {process.returncode}): {err_text[:300]}"
                 if os.path.exists(temp_out):
                     try:
                         os.remove(temp_out)

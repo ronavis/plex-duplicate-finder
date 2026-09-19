@@ -2754,7 +2754,7 @@ body {
 /* Crisp Opaque Sticky Header - Zero Bleed-through */
 .optimizer-table th {
   background: #131926 !important;
-  padding: 9px 12px;
+  padding: 10px 14px;
   text-align: left;
   font-weight: 600;
   color: var(--text-secondary);
@@ -2769,9 +2769,10 @@ body {
 }
 
 .optimizer-table td {
-  padding: 7px 12px;
+  padding: 10px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   vertical-align: middle;
+  text-align: left;
   overflow: hidden;
 }
 
@@ -2825,7 +2826,7 @@ body {
 .badge-reclaim {
   display: inline-flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 2px;
 }
 

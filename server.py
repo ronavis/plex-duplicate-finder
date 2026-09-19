@@ -684,6 +684,11 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
             res = transcoder.transcode_manager.remove_job(job_id)
             self._send_json(200, res)
 
+        elif path == "/api/transcode/queue/retry":
+            job_id = body.get("job_id", "")
+            res = transcoder.transcode_manager.retry_job(job_id)
+            self._send_json(200, res)
+
         elif path == "/api/transcode/queue/clear":
             res = transcoder.transcode_manager.clear_queue()
             self._send_json(200, res)

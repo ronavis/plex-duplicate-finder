@@ -593,6 +593,9 @@ class SpaceOptimizer:
         MEDIA_EXTS = {".mkv", ".mp4", ".avi", ".m4v", ".ts", ".mov"}
         for root, _, files in os.walk(search_root):
             for f in files:
+                f_lower = f.lower()
+                if f_lower.endswith(".tmp_opt.mkv") or ".tmp" in f_lower or f.startswith("."):
+                    continue
                 ext = os.path.splitext(f)[1].lower()
                 if ext in MEDIA_EXTS:
                     full_p = os.path.join(root, f)
