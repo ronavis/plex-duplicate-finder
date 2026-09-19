@@ -751,7 +751,10 @@
               ⚡ Intel(R) N150 QSV Hardware Detected
             </span>
           </div>
-          <button id="btn-modal-optimizer-close" class="modal-close-btn">&times;</button>
+          <div class="modal-header-actions" style="display: flex; align-items: center; gap: 8px;">
+            <button id="btn-modal-optimizer-maximize" class="modal-icon-btn" title="Toggle Fullscreen / Maximize">⛶</button>
+            <button id="btn-modal-optimizer-close" class="modal-close-btn">&times;</button>
+          </div>
         </div>
 
         <div class="optimizer-nav-tabs">
@@ -767,51 +770,67 @@
         <div class="modal-body optimizer-modal-body">
           <!-- View 1: Optimization Advisor -->
           <div id="opt-view-advisor" class="opt-tab-panel">
-            <div class="optimizer-intro-banner">
-              <p class="modal-description" style="margin-bottom: 0;">
-                Identify bloated legacy video codecs (<strong>H.264 / AVC</strong>, <strong>MPEG-2</strong>) and uncompressed audio streams (<strong>DTS-HD MA</strong>, <strong>Dolby TrueHD</strong>). Modernizing to <strong>10-bit HEVC</strong> and <strong>Dolby Digital Plus (E-AC-3 5.1)</strong> typically reclaims <strong>50% to 70%</strong> of storage space with zero visible quality loss.
-              </p>
-            </div>
-
-            <!-- Controls Bar -->
-            <div class="optimizer-controls-panel">
-              <div class="optimizer-drives-row">
-                <div class="drives-label-group">
-                  <label>Drives to Audit:</label>
-                  <div class="drives-quick-actions">
-                    <button type="button" id="btn-optimizer-select-all-drives" class="btn-link-xs">Select All</button>
-                    <span>&bull;</span>
-                    <button type="button" id="btn-optimizer-clear-drives" class="btn-link-xs">Clear</button>
-                  </div>
+            <!-- Collapsible Audit Setup & Drives Accordion -->
+            <div class="optimizer-setup-accordion" id="optimizer-setup-accordion">
+              <div class="optimizer-setup-header" id="optimizer-setup-toggle" title="Click to expand or collapse audit configuration">
+                <div class="setup-header-left">
+                  <span class="setup-toggle-arrow" id="setup-toggle-arrow">▾</span>
+                  <span class="setup-title">⚙ Audit Configuration &amp; Target Drives</span>
+                  <span id="optimizer-setup-summary" class="setup-summary-badge">Drive R: • Movies • Min 100 MB</span>
                 </div>
-                <div id="optimizer-drives-chips" class="drives-chips-container">
-                  <!-- Dynamically filled with drive pills -->
+                <div class="setup-header-right">
+                  <button type="button" class="btn-toggle-setup" id="btn-toggle-optimizer-setup">Hide Setup</button>
                 </div>
               </div>
 
-              <div class="optimizer-options-row">
-                <div class="optimizer-control-group">
-                  <label>Category:</label>
-                  <div class="btn-group-pill">
-                    <button type="button" class="btn-pill-opt active" data-optimizer-cat="all">All</button>
-                    <button type="button" class="btn-pill-opt" data-optimizer-cat="movies">Movies</button>
-                    <button type="button" class="btn-pill-opt" data-optimizer-cat="tv">TV Shows</button>
-                  </div>
+              <div class="optimizer-setup-body" id="optimizer-setup-body">
+                <div class="optimizer-intro-banner">
+                  <p class="modal-description" style="margin-bottom: 0;">
+                    Identify bloated legacy video codecs (<strong>H.264 / AVC</strong>, <strong>MPEG-2</strong>) and uncompressed audio streams (<strong>DTS-HD MA</strong>, <strong>Dolby TrueHD</strong>). Modernizing to <strong>10-bit HEVC</strong> and <strong>Dolby Digital Plus (E-AC-3 5.1)</strong> typically reclaims <strong>50% to 70%</strong> of storage space with zero visible quality loss.
+                  </p>
                 </div>
 
-                <div class="optimizer-control-group">
-                  <label for="input-optimizer-min-size">Min Size:</label>
-                  <div class="input-addon-wrapper" style="max-width: 110px;">
-                    <input type="number" id="input-optimizer-min-size" value="100" min="10" max="5000" class="input-control">
-                    <span class="addon">MB</span>
+                <!-- Controls Bar -->
+                <div class="optimizer-controls-panel">
+                  <div class="optimizer-drives-row">
+                    <div class="drives-label-group">
+                      <label>Drives to Audit:</label>
+                      <div class="drives-quick-actions">
+                        <button type="button" id="btn-optimizer-select-all-drives" class="btn-link-xs">Select All</button>
+                        <span>&bull;</span>
+                        <button type="button" id="btn-optimizer-clear-drives" class="btn-link-xs">Clear</button>
+                      </div>
+                    </div>
+                    <div id="optimizer-drives-chips" class="drives-chips-container">
+                      <!-- Dynamically filled with drive pills -->
+                    </div>
                   </div>
-                </div>
 
-                <div class="optimizer-control-actions">
-                  <button id="btn-start-optimizer-scan" class="btn btn-primary" style="background: linear-gradient(135deg, #059669, #10B981); white-space: nowrap;">
-                    <span>⚡ Run Optimization Audit</span>
-                  </button>
-                  <button id="btn-cancel-optimizer-scan" class="btn btn-danger hidden">Cancel</button>
+                  <div class="optimizer-options-row">
+                    <div class="optimizer-control-group">
+                      <label>Category:</label>
+                      <div class="btn-group-pill">
+                        <button type="button" class="btn-pill-opt active" data-optimizer-cat="all">All</button>
+                        <button type="button" class="btn-pill-opt" data-optimizer-cat="movies">Movies</button>
+                        <button type="button" class="btn-pill-opt" data-optimizer-cat="tv">TV Shows</button>
+                      </div>
+                    </div>
+
+                    <div class="optimizer-control-group">
+                      <label for="input-optimizer-min-size">Min Size:</label>
+                      <div class="input-addon-wrapper" style="max-width: 110px;">
+                        <input type="number" id="input-optimizer-min-size" value="100" min="10" max="5000" class="input-control">
+                        <span class="addon">MB</span>
+                      </div>
+                    </div>
+
+                    <div class="optimizer-control-actions">
+                      <button id="btn-start-optimizer-scan" class="btn btn-primary" style="background: linear-gradient(135deg, #059669, #10B981); white-space: nowrap;">
+                        <span>⚡ Run Optimization Audit</span>
+                      </button>
+                      <button id="btn-cancel-optimizer-scan" class="btn btn-danger hidden">Cancel</button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

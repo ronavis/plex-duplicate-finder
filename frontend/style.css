@@ -2275,30 +2275,165 @@ body {
 /* ==========================================================================
    Space Optimization Advisor & Savings Analyzer Styles
    ========================================================================== */
+
+/* Space Optimization Modal Dimensions & Fullscreen Mode */
+#modal-optimizer .modal-card {
+  width: 96vw;
+  max-width: 1680px;
+  height: 94vh;
+  max-height: 94vh;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#modal-optimizer .modal-card.modal-fullscreen {
+  width: 100vw !important;
+  max-width: 100vw !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  border-radius: 0 !important;
+  border: none !important;
+  margin: 0 !important;
+}
+
+.modal-icon-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+  transition: all var(--transition-fast);
+}
+
+.modal-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
 .optimizer-modal-body {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 20px;
-  max-height: 80vh;
-  overflow-y: auto;
+  flex: 1 1 0%;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden; /* Prevent outer double scrollbar */
+  padding: 12px 20px;
+  gap: 8px;
+}
+
+/* Tab Panels */
+.opt-tab-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+  gap: 8px;
+  overflow: hidden;
+}
+
+/* Collapsible Setup Accordion */
+.optimizer-setup-accordion {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: all var(--transition-normal);
+}
+
+.optimizer-setup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition-fast);
+}
+
+.optimizer-setup-header:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.setup-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.setup-toggle-arrow {
+  font-size: 0.85rem;
+  color: var(--plex-gold);
+  display: inline-block;
+  transition: transform var(--transition-fast);
+}
+
+.setup-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.3px;
+}
+
+.setup-summary-badge {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #34D399;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.btn-toggle-setup {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-toggle-setup:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.optimizer-setup-body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.optimizer-setup-accordion.collapsed .optimizer-setup-body {
+  display: none;
 }
 
 .optimizer-intro-banner {
   background: rgba(16, 185, 129, 0.07);
   border: 1px solid rgba(16, 185, 129, 0.2);
   border-radius: var(--radius-md);
-  padding: 12px 16px;
+  padding: 8px 12px;
 }
 
 .optimizer-controls-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: var(--radius-md);
-  padding: 14px;
+  gap: 10px;
+  background: transparent;
+  padding: 0;
+  border: none;
 }
 
 .optimizer-drives-row {
@@ -2439,24 +2574,26 @@ body {
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(16, 185, 129, 0.3);
   border-radius: var(--radius-md);
-  padding: 14px;
+  padding: 10px 14px;
+  flex-shrink: 0;
 }
 
-/* Stats Cards Grid */
+/* Stats Cards Grid - Sleek & Compact */
 .optimizer-stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .opt-stat-card {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-md);
-  padding: 14px 16px;
+  padding: 8px 12px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .opt-stat-card.highlight-green {
@@ -2465,7 +2602,7 @@ body {
 }
 
 .opt-stat-label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -2473,51 +2610,53 @@ body {
 }
 
 .opt-stat-value {
-  font-size: 1.45rem;
+  font-size: 1.22rem;
   font-weight: 800;
   color: var(--text-primary);
+  line-height: 1.2;
 }
 
 .opt-stat-sub {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   color: var(--text-secondary);
 }
 
-/* Codec Distribution Meter */
+/* Codec Distribution Meter - Compact */
 .optimizer-distribution-wrap {
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: var(--radius-md);
-  padding: 12px 16px;
+  padding: 6px 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .dist-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   color: var(--text-secondary);
   font-weight: 500;
 }
 
 .dist-legend {
   display: flex;
-  gap: 14px;
-  font-size: 0.78rem;
+  gap: 12px;
+  font-size: 0.74rem;
 }
 
 .legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .legend-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
 }
 
@@ -2527,8 +2666,8 @@ body {
 
 .dist-meter-bar {
   display: flex;
-  height: 10px;
-  border-radius: 5px;
+  height: 8px;
+  border-radius: 4px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.05);
 }
@@ -2548,12 +2687,13 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .optimizer-filter-bar .input-control {
   flex: 1;
-  min-width: 220px;
+  min-width: 200px;
 }
 
 .filter-pills {
@@ -2565,8 +2705,8 @@ body {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px;
-  padding: 6px 14px;
-  font-size: 0.8rem;
+  padding: 5px 12px;
+  font-size: 0.78rem;
   font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
@@ -2587,19 +2727,21 @@ body {
 .sort-wrapper {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.82rem;
+  gap: 6px;
+  font-size: 0.8rem;
   color: var(--text-secondary);
 }
 
-/* Results Table */
+/* Results Table - Maximum Visible Vertical Space */
 .optimizer-table-wrapper {
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: #0d111a;
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: var(--radius-md);
-  overflow-x: hidden;
+  overflow-x: auto;
   overflow-y: auto;
-  max-height: 440px;
+  flex: 1 1 0%;
+  min-height: 380px;
+  max-height: none;
 }
 
 .optimizer-table {
@@ -2609,30 +2751,32 @@ body {
   table-layout: fixed;
 }
 
+/* Crisp Opaque Sticky Header - Zero Bleed-through */
 .optimizer-table th {
-  background: rgba(255, 255, 255, 0.04);
-  padding: 10px 14px;
+  background: #131926 !important;
+  padding: 9px 12px;
   text-align: left;
   font-weight: 600;
   color: var(--text-secondary);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.14);
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 20;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  box-shadow: 0 3px 6px -1px rgba(0, 0, 0, 0.6);
 }
 
 .optimizer-table td {
-  padding: 10px 14px;
+  padding: 7px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   vertical-align: middle;
   overflow: hidden;
 }
 
 .optimizer-table tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .title-cell-wrap {
@@ -2841,7 +2985,10 @@ body {
 .opt-tab-panel {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  flex: 1 1 0%;
+  min-height: 0;
+  gap: 10px;
+  overflow: hidden;
 }
 
 /* Active Transcode Telemetry Banner */

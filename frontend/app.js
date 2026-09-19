@@ -2389,6 +2389,13 @@ const btnOpenOptimizerModal = document.getElementById('btn-open-optimizer-modal'
 const modalOptimizer = document.getElementById('modal-optimizer');
 const btnModalOptimizerClose = document.getElementById('btn-modal-optimizer-close');
 const btnModalOptimizerCloseFooter = document.getElementById('btn-modal-optimizer-close-footer');
+const btnModalOptimizerMaximize = document.getElementById('btn-modal-optimizer-maximize');
+const optimizerSetupAccordion = document.getElementById('optimizer-setup-accordion');
+const optimizerSetupToggle = document.getElementById('optimizer-setup-toggle');
+const btnToggleOptimizerSetup = document.getElementById('btn-toggle-optimizer-setup');
+const optimizerSetupBody = document.getElementById('optimizer-setup-body');
+const optimizerSetupSummary = document.getElementById('optimizer-setup-summary');
+const setupToggleArrow = document.getElementById('setup-toggle-arrow');
 const optimizerDrivesChips = document.getElementById('optimizer-drives-chips');
 const btnOptimizerSelectAllDrives = document.getElementById('btn-optimizer-select-all-drives');
 const btnOptimizerClearDrives = document.getElementById('btn-optimizer-clear-drives');
@@ -2419,6 +2426,31 @@ const btnCopyFfmpeg = document.getElementById('btn-copy-ffmpeg');
 const presetHandbrakeGrid = document.getElementById('preset-handbrake-grid');
 const presetTdarrList = document.getElementById('preset-tdarr-list');
 
+function updateOptimizerSetupSummary() {
+  if (!optimizerSetupSummary) return;
+  const drivesList = Array.from(optimizerSelectedDrives).sort().map(d => `${d}:`).join(', ') || 'None';
+  const catName = optimizerActiveCategory === 'all' ? 'All Media' : (optimizerActiveCategory === 'movies' ? 'Movies' : 'TV Shows');
+  const minSize = inputOptimizerMinSize?.value || '100';
+  optimizerSetupSummary.textContent = `Drives: ${drivesList} • ${catName} • Min ${minSize} MB`;
+}
+
+function toggleOptimizerSetup(forceCollapse) {
+  if (!optimizerSetupAccordion) return;
+  const isCurrentlyCollapsed = optimizerSetupAccordion.classList.contains('collapsed');
+  const shouldCollapse = forceCollapse !== undefined ? forceCollapse : !isCurrentlyCollapsed;
+  
+  if (shouldCollapse) {
+    optimizerSetupAccordion.classList.add('collapsed');
+    if (btnToggleOptimizerSetup) btnToggleOptimizerSetup.textContent = 'Show Setup';
+    if (setupToggleArrow) setupToggleArrow.textContent = '▸';
+    updateOptimizerSetupSummary();
+  } else {
+    optimizerSetupAccordion.classList.remove('collapsed');
+    if (btnToggleOptimizerSetup) btnToggleOptimizerSetup.textContent = 'Hide Setup';
+    if (setupToggleArrow) setupToggleArrow.textContent = '▾';
+  }
+}
+
 function initOptimizerAdvisor() {
   if (btnOpenOptimizerModal) {
     btnOpenOptimizerModal.addEventListener('click', openOptimizerModal);
@@ -2428,6 +2460,31 @@ function initOptimizerAdvisor() {
   }
   if (btnModalOptimizerCloseFooter) {
     btnModalOptimizerCloseFooter.addEventListener('click', closeOptimizerModal);
+  }
+  if (btnModalOptimizerMaximize) {
+    btnModalOptimizerMaximize.addEventListener('click', () => {
+      const card = modalOptimizer ? modalOptimizer.querySelector('.modal-card') : null;
+      if (card) {
+        card.classList.toggle('modal-fullscreen');
+        const isFull = card.classList.contains('modal-fullscreen');
+        btnModalOptimizerMaximize.textContent = isFull ? '🗗' : '⛶';
+        btnModalOptimizerMaximize.title = isFull ? 'Restore Window Size' : 'Maximize / Fullscreen';
+      }
+    });
+  }
+  if (optimizerSetupToggle) {
+    optimizerSetupToggle.addEventListener('click', () => {
+      toggleOptimizerSetup();
+    });
+  }
+  if (btnToggleOptimizerSetup) {
+    btnToggleOptimizerSetup.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleOptimizerSetup();
+    });
+  }
+  if (inputOptimizerMinSize) {
+    inputOptimizerMinSize.addEventListener('input', updateOptimizerSetupSummary);
   }
   if (btnStartOptimizerScan) {
     btnStartOptimizerScan.addEventListener('click', startOptimizerAudit);
@@ -2454,6 +2511,7 @@ function initOptimizerAdvisor() {
         optimizerSelectedDrives.add(d.letter);
       });
       document.querySelectorAll('#optimizer-drives-chips .drive-chip').forEach(c => c.classList.add('selected'));
+      updateOptimizerSetupSummary();
       if (optimizerAllCandidates.length > 0) {
         optimizerTableDriveFilter = 'all';
         if (selectOptimizerFilterDrive) selectOptimizerFilterDrive.value = 'all';
@@ -2467,6 +2525,7 @@ function initOptimizerAdvisor() {
     btnOptimizerClearDrives.addEventListener('click', () => {
       optimizerSelectedDrives.clear();
       document.querySelectorAll('#optimizer-drives-chips .drive-chip').forEach(c => c.classList.remove('selected'));
+      updateOptimizerSetupSummary();
     });
   }
 
@@ -2476,6 +2535,7 @@ function initOptimizerAdvisor() {
       document.querySelectorAll('[data-optimizer-cat]').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       optimizerActiveCategory = btn.dataset.optimizerCat;
+      updateOptimizerSetupSummary();
       updateFilteredOptimizerStats();
       renderOptimizerTable();
     });
@@ -2520,6 +2580,10 @@ function initOptimizerAdvisor() {
 async function openOptimizerModal() {
   modalOptimizer.classList.remove('hidden');
   populateOptimizerDrives();
+  updateOptimizerSetupSummary();
+  if (optimizerAllCandidates && optimizerAllCandidates.length > 0) {
+    toggleOptimizerSetup(true);
+  }
   await fetchOptimizerStatus();
 }
 
@@ -2555,6 +2619,8 @@ function populateOptimizerDrives() {
         chip.classList.add('selected');
       }
 
+      updateOptimizerSetupSummary();
+
       // Synchronize immediately with table filter if results are already loaded
       if (optimizerAllCandidates.length > 0) {
         if (optimizerSelectedDrives.size === 1) {
@@ -2571,6 +2637,7 @@ function populateOptimizerDrives() {
     });
     optimizerDrivesChips.appendChild(chip);
   });
+  updateOptimizerSetupSummary();
 }
 
 function populateOptimizerFilterDrives() {
@@ -2792,6 +2859,9 @@ function showOptimizerResults(data) {
   optimizerStatsStrip.classList.remove('hidden');
   optimizerDistributionContainer.classList.remove('hidden');
   optimizerFilterBar.classList.remove('hidden');
+
+  // Auto-collapse audit setup panel so the candidates table gets maximum vertical space
+  toggleOptimizerSetup(true);
 
   populateOptimizerFilterDrives();
   updateFilteredOptimizerStats();
