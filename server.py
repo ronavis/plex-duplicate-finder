@@ -29,6 +29,7 @@ import plex_api
 import pool_migrator
 import tmdb_api
 import optimizer
+import transcoder
 
 PORT = 8282
 WEB_DIR = Path(__file__).parent / "frontend"
@@ -207,6 +208,17 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
         elif path == "/api/optimizer/preset":
             title = query.get("title", [""])[0]
             self._send_json(200, optimizer.space_optimizer.generate_transcode_preset(title))
+
+        # Transcode Queue & Runner Status & Preview Stream
+        elif path == "/api/transcode/status":
+            self._send_json(200, transcoder.transcode_manager.get_status())
+
+        elif path == "/api/transcode/preview_clip":
+            clip_path = transcoder.TEST_PREVIEW_FILE
+            if os.path.exists(clip_path):
+                self._handle_media_stream(clip_path)
+            else:
+                self._send_json(404, {"status": "error", "message": "Preview clip not generated yet."})
 
         # Feature 5: Media Stream Range Requests
         elif path == "/api/media/stream":
@@ -657,6 +669,56 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
         elif path == "/api/optimizer/cancel":
             res = optimizer.space_optimizer.cancel_scan()
             self._send_json(200, res)
+
+        # Transcoder Queue Management & Worker Controls
+        elif path == "/api/transcode/queue/add":
+            title = body.get("title", "Media Title")
+            files = body.get("files", [])
+            if not files:
+                files = optimizer.space_optimizer.get_files_for_title(title)
+            res = transcoder.transcode_manager.add_files_to_queue(title, files)
+            self._send_json(200, res)
+
+        elif path == "/api/transcode/queue/remove":
+            job_id = body.get("job_id", "")
+            res = transcoder.transcode_manager.remove_job(job_id)
+            self._send_json(200, res)
+
+        elif path == "/api/transcode/queue/clear":
+            res = transcoder.transcode_manager.clear_queue()
+            self._send_json(200, res)
+
+        elif path == "/api/transcode/start":
+            res = transcoder.transcode_manager.start_queue()
+            self._send_json(200, res)
+
+        elif path == "/api/transcode/pause":
+            res = transcoder.transcode_manager.pause_queue()
+            self._send_json(200, res)
+
+        elif path == "/api/transcode/skip":
+            res = transcoder.transcode_manager.skip_active_job()
+            self._send_json(200, res)
+
+        elif path == "/api/transcode/settings":
+            safety = body.get("safety_mode")
+            preset = body.get("quality_preset")
+            res = transcoder.transcode_manager.update_settings(safety, preset)
+            self._send_json(200, res)
+
+        elif path == "/api/transcode/test":
+            file_path = body.get("file_path", "")
+            title = body.get("title", "")
+            if not file_path and title:
+                files = optimizer.space_optimizer.get_files_for_title(title)
+                if files:
+                    file_path = files[0].get("path", "")
+            if not file_path:
+                self._send_json(400, {"status": "error", "message": "No file found to test."})
+            else:
+                dur = int(body.get("duration_sec", 60))
+                res = transcoder.transcode_manager.run_test_transcode(file_path, dur)
+                self._send_json(200 if res.get("status") == "ok" else 500, res)
 
         else:
             self._send_json(404, {"status": "not_found"})

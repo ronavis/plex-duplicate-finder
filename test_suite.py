@@ -270,6 +270,17 @@ class TestApiEndpoints(unittest.TestCase):
             self.assertIn("ffmpeg_qsv_command", data)
             self.assertIn("hevc_qsv", data["ffmpeg_qsv_command"])
 
+    def test_transcode_status_api(self):
+        import urllib.request
+        req = urllib.request.Request("http://127.0.0.1:8282/api/transcode/status")
+        with urllib.request.urlopen(req, timeout=4.0) as resp:
+            self.assertEqual(resp.status, 200)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertEqual(data["status"], "ok")
+            self.assertIn("has_qsv", data)
+            self.assertTrue(data["has_qsv"])
+            self.assertIn("queue", data)
+
 
 if __name__ == "__main__":
     unittest.main()

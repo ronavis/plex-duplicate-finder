@@ -17,6 +17,9 @@ scan_cache.json
 scan_history.json
 plex_config.json
 deletion_audit.json
+optimization_cache.json
+transcode_queue.json
+scratch/
 _quarantine/
 
 # Windows system files

@@ -544,6 +544,51 @@ class SpaceOptimizer:
             "estimated_space_reduction": "60% - 70%"
         }
 
+    def get_files_for_title(self, title: str) -> List[Dict[str, Any]]:
+        """Return all media file items for a candidate title."""
+        target_cand = None
+        for c in self.results:
+            if c.get("title") == title:
+                target_cand = c
+                break
+        if not target_cand:
+            return []
+
+        # If candidate already has file list
+        if "files" in target_cand and target_cand["files"]:
+            return target_cand["files"]
+
+        # Otherwise discover files from sample path's parent series/movie folder
+        sample = target_cand.get("sample_path", "")
+        if not sample or not os.path.exists(sample):
+            return target_cand.get("file_samples", [])
+
+        p_sample = Path(sample)
+        # If TV show, parent might be Season folder, so grandparent is series folder
+        search_root = p_sample.parent
+        if "season" in search_root.name.lower():
+            search_root = search_root.parent
+
+        found_files = []
+        MEDIA_EXTS = {".mkv", ".mp4", ".avi", ".m4v", ".ts", ".mov"}
+        for root, _, files in os.walk(search_root):
+            for f in files:
+                ext = os.path.splitext(f)[1].lower()
+                if ext in MEDIA_EXTS:
+                    full_p = os.path.join(root, f)
+                    try:
+                        sz = os.path.getsize(full_p)
+                    except Exception:
+                        sz = 0
+                    found_files.append({
+                        "path": full_p,
+                        "name": f,
+                        "size_bytes": sz,
+                        "size_human": scanner.format_bytes(sz)
+                    })
+
+        return found_files if found_files else target_cand.get("file_samples", [])
+
 
 # Global singleton instance
 space_optimizer = SpaceOptimizer()

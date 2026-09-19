@@ -2916,9 +2916,11 @@ function renderOptimizerTable() {
           </div>
         </td>
         <td style="text-align: center;">
-          <button type="button" class="btn btn-secondary btn-sm" onclick="viewOptimizerPreset('${escapeHtml(it.title).replace(/'/g, "\\'")}')" title="View Intel QuickSync transcode profile and command">
-            ⚡ Presets
-          </button>
+          <div style="display: inline-flex; gap: 4px; justify-content: center; flex-wrap: wrap;">
+            <button type="button" class="btn btn-secondary btn-xs" onclick="runOptimizerTest('${escapeHtml(it.title).replace(/'/g, "\\'")}')" title="Test 60-sec Intel QSV transcode and preview video">⚡ Test</button>
+            <button type="button" class="btn btn-primary btn-xs" style="background: linear-gradient(135deg, #059669, #10B981);" onclick="queueOptimizerTitle('${escapeHtml(it.title).replace(/'/g, "\\'")}')" title="Queue all files in this title for optimization">➕ Queue</button>
+            <button type="button" class="btn btn-secondary btn-xs" onclick="viewOptimizerPreset('${escapeHtml(it.title).replace(/'/g, "\\'")}')" title="View Intel QuickSync transcode profile and command">Preset</button>
+          </div>
         </td>
       </tr>
     `;
@@ -2967,7 +2969,374 @@ function copyFfmpegCommand() {
   });
 }
 
-// Auto-initialize Space Optimizer when app starts
+// ==========================================================================
+// TRANSCODE QUEUE & RUNNER LOGIC
+// ==========================================================================
+
+let transcodePollTimer = null;
+let currentTestingTitle = null;
+
+// Tab Switcher Elements
+const tabOptAdvisor = document.getElementById('tab-opt-advisor');
+const tabOptQueue = document.getElementById('tab-opt-queue');
+const optViewAdvisor = document.getElementById('opt-view-advisor');
+const optViewQueue = document.getElementById('opt-view-queue');
+const optQueueBadge = document.getElementById('opt-queue-badge');
+
+// Queue View Elements
+const queueActiveBanner = document.getElementById('queue-active-banner');
+const queueActiveTitle = document.getElementById('queue-active-title');
+const queueProgressBar = document.getElementById('queue-progress-bar');
+const queueTelemetryPct = document.getElementById('queue-telemetry-pct');
+const queueTelemetryFps = document.getElementById('queue-telemetry-fps');
+const queueTelemetrySpeed = document.getElementById('queue-telemetry-speed');
+const queueTelemetryEta = document.getElementById('queue-telemetry-eta');
+const queueTelemetrySizes = document.getElementById('queue-telemetry-sizes');
+const btnQueueStart = document.getElementById('btn-queue-start');
+const btnQueuePause = document.getElementById('btn-queue-pause');
+const btnQueueSkip = document.getElementById('btn-queue-skip');
+const btnQueueClear = document.getElementById('btn-queue-clear');
+const selectTranscodeSafety = document.getElementById('select-transcode-safety');
+const selectTranscodePreset = document.getElementById('select-transcode-preset');
+const queueTotalReclaimed = document.getElementById('queue-total-reclaimed');
+const queueItemsTbody = document.getElementById('queue-items-tbody');
+
+// Test Preview Modal Elements
+const modalOptimizerTest = document.getElementById('modal-optimizer-test');
+const btnModalTestClose = document.getElementById('btn-modal-test-close');
+const btnModalTestCloseFooter = document.getElementById('btn-modal-test-close-footer');
+const btnModalTestQueueSeries = document.getElementById('btn-modal-test-queue-series');
+const testModalTitle = document.getElementById('test-modal-title');
+const testStatOrigBitrate = document.getElementById('test-stat-orig-bitrate');
+const testStatOrigSize = document.getElementById('test-stat-orig-size');
+const testStatNewBitrate = document.getElementById('test-stat-new-bitrate');
+const testStatNewSize = document.getElementById('test-stat-new-size');
+const testStatSavingsPct = document.getElementById('test-stat-savings-pct');
+const testStatReclaimed = document.getElementById('test-stat-reclaimed');
+const testStatSpeed = document.getElementById('test-stat-speed');
+const testStatTime = document.getElementById('test-stat-time');
+const testVideoPlayer = document.getElementById('test-video-player');
+
+function initTranscodeQueueUI() {
+  // Tabs
+  if (tabOptAdvisor) {
+    tabOptAdvisor.addEventListener('click', () => switchOptimizerTab('advisor'));
+  }
+  if (tabOptQueue) {
+    tabOptQueue.addEventListener('click', () => switchOptimizerTab('queue'));
+  }
+
+  // Queue Controls
+  if (btnQueueStart) {
+    btnQueueStart.addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/transcode/start', { method: 'POST' });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('Transcode queue started.');
+          fetchTranscodeStatus();
+        } else {
+          alert(data.message || 'Failed to start queue.');
+        }
+      } catch (e) {
+        alert('Error starting queue: ' + e.message);
+      }
+    });
+  }
+
+  if (btnQueuePause) {
+    btnQueuePause.addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/transcode/pause', { method: 'POST' });
+        const data = await res.json();
+        showToast(data.message || 'Pausing queue...');
+        fetchTranscodeStatus();
+      } catch (e) {
+        alert('Error pausing queue: ' + e.message);
+      }
+    });
+  }
+
+  if (btnQueueSkip) {
+    btnQueueSkip.addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/transcode/skip', { method: 'POST' });
+        const data = await res.json();
+        showToast(data.message || 'Skipping active file...');
+        fetchTranscodeStatus();
+      } catch (e) {
+        alert('Error skipping job: ' + e.message);
+      }
+    });
+  }
+
+  if (btnQueueClear) {
+    btnQueueClear.addEventListener('click', async () => {
+      if (!confirm('Clear all pending items from transcode queue?')) return;
+      try {
+        const res = await fetch('/api/transcode/queue/clear', { method: 'POST' });
+        showToast('Queue cleared.');
+        fetchTranscodeStatus();
+      } catch (e) {
+        alert('Error clearing queue: ' + e.message);
+      }
+    });
+  }
+
+  // Settings dropdowns
+  if (selectTranscodeSafety) {
+    selectTranscodeSafety.addEventListener('change', async (e) => {
+      await fetch('/api/transcode/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ safety_mode: e.target.value })
+      });
+    });
+  }
+
+  if (selectTranscodePreset) {
+    selectTranscodePreset.addEventListener('change', async (e) => {
+      await fetch('/api/transcode/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quality_preset: e.target.value })
+      });
+    });
+  }
+
+  // Test modal close handlers
+  if (btnModalTestClose) {
+    btnModalTestClose.addEventListener('click', closeTestModal);
+  }
+  if (btnModalTestCloseFooter) {
+    btnModalTestCloseFooter.addEventListener('click', closeTestModal);
+  }
+  if (btnModalTestQueueSeries) {
+    btnModalTestQueueSeries.addEventListener('click', async () => {
+      if (currentTestingTitle) {
+        await queueOptimizerTitle(currentTestingTitle);
+        closeTestModal();
+        switchOptimizerTab('queue');
+      }
+    });
+  }
+
+  // Start polling
+  startTranscodePolling();
+}
+
+function switchOptimizerTab(tab) {
+  if (tab === 'advisor') {
+    tabOptAdvisor.classList.add('active');
+    tabOptQueue.classList.remove('active');
+    optViewAdvisor.classList.remove('hidden');
+    optViewQueue.classList.add('hidden');
+  } else {
+    tabOptQueue.classList.add('active');
+    tabOptAdvisor.classList.remove('active');
+    optViewQueue.classList.remove('hidden');
+    optViewAdvisor.classList.add('hidden');
+    fetchTranscodeStatus();
+  }
+}
+
+function closeTestModal() {
+  if (testVideoPlayer) {
+    testVideoPlayer.pause();
+    testVideoPlayer.src = '';
+  }
+  if (modalOptimizerTest) {
+    modalOptimizerTest.classList.add('hidden');
+  }
+}
+
+function startTranscodePolling() {
+  if (transcodePollTimer) clearInterval(transcodePollTimer);
+  transcodePollTimer = setInterval(fetchTranscodeStatus, 1500);
+}
+
+async function fetchTranscodeStatus() {
+  try {
+    const res = await fetch('/api/transcode/status');
+    const data = await res.json();
+    if (data.status !== 'ok') return;
+
+    // Update Badge
+    const pendingCount = data.queue_counts?.pending || 0;
+    if (optQueueBadge) {
+      optQueueBadge.textContent = pendingCount;
+      optQueueBadge.style.display = pendingCount > 0 ? 'inline-block' : 'none';
+    }
+
+    // Update session reclaimed
+    if (queueTotalReclaimed) {
+      queueTotalReclaimed.textContent = `+${data.total_reclaimed_human || '0.00 B'}`;
+    }
+
+    // Update settings controls
+    if (selectTranscodeSafety && data.safety_mode) {
+      selectTranscodeSafety.value = data.safety_mode;
+    }
+    if (selectTranscodePreset && data.quality_preset) {
+      selectTranscodePreset.value = data.quality_preset;
+    }
+
+    // Update Active Banner
+    const active = data.active_job;
+    if (data.is_running && active) {
+      queueActiveBanner.classList.remove('hidden');
+      if (queueActiveTitle) queueActiveTitle.textContent = `Optimizing: ${active.title} (${active.filename})`;
+      if (queueProgressBar) queueProgressBar.style.width = `${active.progress_pct}%`;
+      if (queueTelemetryPct) queueTelemetryPct.textContent = `${active.progress_pct}%`;
+      if (queueTelemetryFps) queueTelemetryFps.textContent = `${active.current_fps} FPS`;
+      if (queueTelemetrySpeed) queueTelemetrySpeed.textContent = `${active.current_speed} real-time`;
+      if (queueTelemetryEta) queueTelemetryEta.textContent = active.eta_seconds > 0 ? `ETA: ~${active.eta_seconds}s` : 'Finalizing...';
+      if (queueTelemetrySizes) {
+        const projHuman = formatBytes(active.projected_size_bytes);
+        queueTelemetrySizes.textContent = `${active.original_size_human} → Projected ~${projHuman}`;
+      }
+      if (btnQueueStart) btnQueueStart.disabled = true;
+    } else {
+      queueActiveBanner.classList.add('hidden');
+      if (btnQueueStart) btnQueueStart.disabled = false;
+    }
+
+    // Render Queue Items Table
+    renderQueueTable(data.queue || []);
+
+  } catch (e) {
+    // Silently ignore polling network interruptions
+  }
+}
+
+function renderQueueTable(queue) {
+  if (!queueItemsTbody) return;
+
+  if (queue.length === 0) {
+    queueItemsTbody.innerHTML = '<tr><td colspan="6" class="table-empty">Transcode queue is empty. Click "+ Queue" on any show or movie in the Advisor tab to add files.</td></tr>';
+    return;
+  }
+
+  queueItemsTbody.innerHTML = queue.map(j => {
+    let statusBadge = '';
+    if (j.status === 'completed') {
+      statusBadge = `<span class="badge badge-accent" style="background: rgba(16, 185, 129, 0.15); color: #10B981;">✓ Completed (+${j.reclaimed_human})</span>`;
+    } else if (j.status === 'running') {
+      statusBadge = `<span class="badge badge-primary" style="background: rgba(229,160,13,0.2); color: var(--plex-gold);">⚡ Running (${j.progress_pct}%)</span>`;
+    } else if (j.status === 'failed') {
+      statusBadge = `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #EF4444;" title="${escapeHtml(j.error_message || '')}">✕ Failed</span>`;
+    } else if (j.status === 'cancelled') {
+      statusBadge = `<span class="badge" style="background: rgba(156, 163, 175, 0.2); color: #9CA3AF;">Skipped</span>`;
+    } else {
+      statusBadge = `<span class="badge" style="background: rgba(255, 255, 255, 0.08); color: var(--text-secondary);">Pending</span>`;
+    }
+
+    return `
+      <tr>
+        <td>
+          <div class="title-cell-wrap">
+            <div class="title-info-meta">
+              <span class="title-main-name" title="${escapeHtml(j.filename)}">${escapeHtml(j.filename)}</span>
+              <span class="title-sub-meta">${escapeHtml(j.title)}</span>
+            </div>
+          </div>
+        </td>
+        <td><strong>${j.drive ? j.drive + ':' : '-'}</strong></td>
+        <td style="text-align: right; font-weight: 600;">${j.original_size_human}</td>
+        <td style="text-align: right; color: var(--text-secondary);">${j.status === 'completed' ? j.new_size_human : formatBytes(j.projected_size_bytes)}</td>
+        <td>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            ${statusBadge}
+            ${j.status === 'running' ? `<div class="progress-bar-track" style="height: 4px;"><div class="progress-bar-fill" style="width: ${j.progress_pct}%; background: #10B981;"></div></div>` : ''}
+          </div>
+        </td>
+        <td style="text-align: center;">
+          ${j.status === 'running' ? 
+            `<button type="button" class="btn btn-secondary btn-xs" onclick="fetch('/api/transcode/skip', {method:'POST'}).then(fetchTranscodeStatus)">Skip</button>` : 
+            `<button type="button" class="btn btn-secondary btn-xs" onclick="removeQueueJob('${j.id}')">✕</button>`
+          }
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+window.queueOptimizerTitle = async function(title) {
+  try {
+    showToast(`Queueing "${title}" for Intel QSV optimization...`);
+    const res = await fetch('/api/transcode/queue/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title })
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      showToast(data.message || `Added ${data.added_count} files to queue!`);
+      fetchTranscodeStatus();
+    } else {
+      alert(data.message || 'Failed to add title to queue.');
+    }
+  } catch (e) {
+    alert('Error queueing title: ' + e.message);
+  }
+};
+
+window.removeQueueJob = async function(jobId) {
+  try {
+    const res = await fetch('/api/transcode/queue/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_id: jobId })
+    });
+    fetchTranscodeStatus();
+  } catch (e) {
+    console.warn('Error removing queue job:', e);
+  }
+};
+
+window.runOptimizerTest = async function(title) {
+  currentTestingTitle = title;
+  showToast(`Running 60-second Intel QSV test transcode on "${title}"...`);
+  
+  try {
+    const res = await fetch('/api/transcode/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, duration_sec: 60 })
+    });
+    const data = await res.json();
+
+    if (data.status === 'ok') {
+      if (testModalTitle) testModalTitle.textContent = `Intel QuickSync Test Preview: ${data.filename}`;
+      if (testStatOrigBitrate) testStatOrigBitrate.textContent = `${data.orig_bitrate_kbps} kbps`;
+      if (testStatOrigSize) testStatOrigSize.textContent = `Original: ${data.orig_size_human}`;
+      if (testStatNewBitrate) testStatNewBitrate.textContent = `${data.new_bitrate_kbps} kbps`;
+      if (testStatNewSize) testStatNewSize.textContent = `Projected: ${data.projected_new_size_human}`;
+      if (testStatSavingsPct) testStatSavingsPct.textContent = `-${data.savings_pct}%`;
+      if (testStatReclaimed) testStatReclaimed.textContent = `Reclaims ~${data.reclaimed_estimate_human}`;
+      if (testStatSpeed) testStatSpeed.textContent = data.effective_speed;
+      if (testStatTime) testStatTime.textContent = `60s clip processed in ${data.encoding_time_sec}s`;
+
+      if (testVideoPlayer) {
+        testVideoPlayer.src = `${data.preview_url}?t=${Date.now()}`;
+        testVideoPlayer.load();
+        testVideoPlayer.play().catch(() => {});
+      }
+
+      if (modalOptimizerTest) {
+        modalOptimizerTest.classList.remove('hidden');
+      }
+    } else {
+      alert('Test transcode failed: ' + (data.message || 'Unknown error'));
+    }
+  } catch (e) {
+    alert('Error running test transcode: ' + e.message);
+  }
+};
+
+// Auto-initialize Space Optimizer & Transcode Queue when app starts
 initOptimizerAdvisor();
+initTranscodeQueueUI();
+
 
 
