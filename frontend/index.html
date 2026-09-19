@@ -762,36 +762,45 @@
           </div>
 
           <!-- Controls Bar -->
-          <div class="optimizer-controls-bar">
-            <div class="optimizer-control-group" style="flex: 2;">
-              <label>Drives to Audit:</label>
+          <div class="optimizer-controls-panel">
+            <div class="optimizer-drives-row">
+              <div class="drives-label-group">
+                <label>Drives to Audit:</label>
+                <div class="drives-quick-actions">
+                  <button type="button" id="btn-optimizer-select-all-drives" class="btn-link-xs">Select All</button>
+                  <span>&bull;</span>
+                  <button type="button" id="btn-optimizer-clear-drives" class="btn-link-xs">Clear</button>
+                </div>
+              </div>
               <div id="optimizer-drives-chips" class="drives-chips-container">
                 <!-- Dynamically filled with drive pills -->
               </div>
             </div>
 
-            <div class="optimizer-control-group">
-              <label>Category:</label>
-              <div class="btn-group-pill">
-                <button type="button" class="btn-pill-opt active" data-optimizer-cat="all">All</button>
-                <button type="button" class="btn-pill-opt" data-optimizer-cat="movies">Movies</button>
-                <button type="button" class="btn-pill-opt" data-optimizer-cat="tv">TV Shows</button>
+            <div class="optimizer-options-row">
+              <div class="optimizer-control-group">
+                <label>Category:</label>
+                <div class="btn-group-pill">
+                  <button type="button" class="btn-pill-opt active" data-optimizer-cat="all">All</button>
+                  <button type="button" class="btn-pill-opt" data-optimizer-cat="movies">Movies</button>
+                  <button type="button" class="btn-pill-opt" data-optimizer-cat="tv">TV Shows</button>
+                </div>
               </div>
-            </div>
 
-            <div class="optimizer-control-group">
-              <label for="input-optimizer-min-size">Min Size:</label>
-              <div class="input-addon-wrapper" style="max-width: 110px;">
-                <input type="number" id="input-optimizer-min-size" value="100" min="10" max="5000" class="input-control">
-                <span class="addon">MB</span>
+              <div class="optimizer-control-group">
+                <label for="input-optimizer-min-size">Min Size:</label>
+                <div class="input-addon-wrapper" style="max-width: 110px;">
+                  <input type="number" id="input-optimizer-min-size" value="100" min="10" max="5000" class="input-control">
+                  <span class="addon">MB</span>
+                </div>
               </div>
-            </div>
 
-            <div class="optimizer-control-actions">
-              <button id="btn-start-optimizer-scan" class="btn btn-primary" style="background: linear-gradient(135deg, #059669, #10B981); white-space: nowrap;">
-                <span>⚡ Run Optimization Audit</span>
-              </button>
-              <button id="btn-cancel-optimizer-scan" class="btn btn-danger hidden">Cancel</button>
+              <div class="optimizer-control-actions">
+                <button id="btn-start-optimizer-scan" class="btn btn-primary" style="background: linear-gradient(135deg, #059669, #10B981); white-space: nowrap;">
+                  <span>⚡ Run Optimization Audit</span>
+                </button>
+                <button id="btn-cancel-optimizer-scan" class="btn btn-danger hidden">Cancel</button>
+              </div>
             </div>
           </div>
 
@@ -855,6 +864,12 @@
               <button type="button" class="btn-filter-pill" data-prio-filter="lossless">Lossless Audio Only</button>
             </div>
             <div class="sort-wrapper">
+              <label for="select-optimizer-filter-drive">Filter Drive:</label>
+              <select id="select-optimizer-filter-drive" class="input-control select-control" style="width: auto; min-width: 140px;">
+                <option value="all">All Audited Drives</option>
+              </select>
+            </div>
+            <div class="sort-wrapper">
               <label for="select-optimizer-sort">Sort:</label>
               <select id="select-optimizer-sort" class="input-control select-control" style="width: auto;">
                 <option value="reclaim_desc">Most Space Reclaimed</option>
@@ -870,13 +885,13 @@
             <table class="optimizer-table">
               <thead>
                 <tr>
-                  <th>Title / Media Name</th>
-                  <th style="width: 100px;">Type</th>
-                  <th style="width: 160px;">Codecs &amp; Audio</th>
-                  <th style="width: 120px; text-align: right;">Current Size</th>
-                  <th style="width: 120px; text-align: right;">Optimized Size</th>
-                  <th style="width: 160px; text-align: right;">Reclaim Potential</th>
-                  <th style="width: 130px; text-align: center;">Actions</th>
+                  <th style="width: 28%;">Title / Media Name</th>
+                  <th style="width: 9%;">Type</th>
+                  <th style="width: 19%;">Codecs &amp; Audio</th>
+                  <th style="width: 11%; text-align: right;">Current Size</th>
+                  <th style="width: 11%; text-align: right;">Optimized Size</th>
+                  <th style="width: 12%; text-align: right;">Reclaim Potential</th>
+                  <th style="width: 10%; text-align: center;">Actions</th>
                 </tr>
               </thead>
               <tbody id="optimizer-items-tbody">

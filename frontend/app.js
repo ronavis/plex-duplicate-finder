@@ -2382,6 +2382,7 @@ let optimizerActivePriority = 'all';
 let optimizerSearchQuery = '';
 let optimizerSortBy = 'reclaim_desc';
 let optimizerSelectedDrives = new Set(['R']);
+let optimizerTableDriveFilter = 'all';
 
 // Elements
 const btnOpenOptimizerModal = document.getElementById('btn-open-optimizer-modal');
@@ -2389,6 +2390,8 @@ const modalOptimizer = document.getElementById('modal-optimizer');
 const btnModalOptimizerClose = document.getElementById('btn-modal-optimizer-close');
 const btnModalOptimizerCloseFooter = document.getElementById('btn-modal-optimizer-close-footer');
 const optimizerDrivesChips = document.getElementById('optimizer-drives-chips');
+const btnOptimizerSelectAllDrives = document.getElementById('btn-optimizer-select-all-drives');
+const btnOptimizerClearDrives = document.getElementById('btn-optimizer-clear-drives');
 const btnStartOptimizerScan = document.getElementById('btn-start-optimizer-scan');
 const btnCancelOptimizerScan = document.getElementById('btn-cancel-optimizer-scan');
 const optimizerScanningBanner = document.getElementById('optimizer-scanning-banner');
@@ -2400,6 +2403,7 @@ const optimizerDistributionContainer = document.getElementById('optimizer-distri
 const optimizerCodecBar = document.getElementById('optimizer-codec-bar');
 const optimizerFilterBar = document.getElementById('optimizer-filter-bar');
 const inputOptimizerSearch = document.getElementById('input-optimizer-search');
+const selectOptimizerFilterDrive = document.getElementById('select-optimizer-filter-drive');
 const selectOptimizerSort = document.getElementById('select-optimizer-sort');
 const optimizerItemsTbody = document.getElementById('optimizer-items-tbody');
 const inputOptimizerMinSize = document.getElementById('input-optimizer-min-size');
@@ -2441,12 +2445,38 @@ function initOptimizerAdvisor() {
     btnCopyFfmpeg.addEventListener('click', copyFfmpegCommand);
   }
 
+  // Quick select/clear drive chips
+  if (btnOptimizerSelectAllDrives) {
+    btnOptimizerSelectAllDrives.addEventListener('click', () => {
+      optimizerSelectedDrives.clear();
+      availableDrives.forEach(d => {
+        if (d.label && d.label.toLowerCase().includes('windows')) return;
+        optimizerSelectedDrives.add(d.letter);
+      });
+      document.querySelectorAll('#optimizer-drives-chips .drive-chip').forEach(c => c.classList.add('selected'));
+      if (optimizerAllCandidates.length > 0) {
+        optimizerTableDriveFilter = 'all';
+        if (selectOptimizerFilterDrive) selectOptimizerFilterDrive.value = 'all';
+        updateFilteredOptimizerStats();
+        renderOptimizerTable();
+      }
+    });
+  }
+
+  if (btnOptimizerClearDrives) {
+    btnOptimizerClearDrives.addEventListener('click', () => {
+      optimizerSelectedDrives.clear();
+      document.querySelectorAll('#optimizer-drives-chips .drive-chip').forEach(c => c.classList.remove('selected'));
+    });
+  }
+
   // Category pills
   document.querySelectorAll('[data-optimizer-cat]').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('[data-optimizer-cat]').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       optimizerActiveCategory = btn.dataset.optimizerCat;
+      updateFilteredOptimizerStats();
       renderOptimizerTable();
     });
   });
@@ -2465,6 +2495,15 @@ function initOptimizerAdvisor() {
   if (inputOptimizerSearch) {
     inputOptimizerSearch.addEventListener('input', (e) => {
       optimizerSearchQuery = e.target.value.toLowerCase().trim();
+      renderOptimizerTable();
+    });
+  }
+
+  // Table Drive filter dropdown
+  if (selectOptimizerFilterDrive) {
+    selectOptimizerFilterDrive.addEventListener('change', (e) => {
+      optimizerTableDriveFilter = e.target.value;
+      updateFilteredOptimizerStats();
       renderOptimizerTable();
     });
   }
@@ -2496,12 +2535,15 @@ function populateOptimizerDrives() {
     if (d.label && d.label.toLowerCase().includes('windows')) return;
     const chip = document.createElement('div');
     chip.className = 'drive-chip';
+    chip.dataset.letter = d.letter;
     const isSelected = optimizerSelectedDrives.has(d.letter) || (optimizerSelectedDrives.size === 0 && d.letter === 'R');
     if (isSelected) {
       chip.classList.add('selected');
       optimizerSelectedDrives.add(d.letter);
     }
-    chip.innerHTML = `<strong>${d.letter}:</strong> ${d.label || 'Storage'} (${d.free_human} free)`;
+    const freeHuman = formatBytes(d.free_bytes || 0);
+    chip.innerHTML = `<span class="chip-check">✓</span> <strong>${d.letter}:</strong> ${escapeHtml(d.label || 'Storage')} <span class="chip-free">(${freeHuman} free)</span>`;
+    
     chip.addEventListener('click', () => {
       if (optimizerSelectedDrives.has(d.letter)) {
         if (optimizerSelectedDrives.size > 1) {
@@ -2512,9 +2554,127 @@ function populateOptimizerDrives() {
         optimizerSelectedDrives.add(d.letter);
         chip.classList.add('selected');
       }
+
+      // Synchronize immediately with table filter if results are already loaded
+      if (optimizerAllCandidates.length > 0) {
+        if (optimizerSelectedDrives.size === 1) {
+          const single = Array.from(optimizerSelectedDrives)[0];
+          optimizerTableDriveFilter = single;
+          if (selectOptimizerFilterDrive) selectOptimizerFilterDrive.value = single;
+        } else {
+          optimizerTableDriveFilter = 'all';
+          if (selectOptimizerFilterDrive) selectOptimizerFilterDrive.value = 'all';
+        }
+        updateFilteredOptimizerStats();
+        renderOptimizerTable();
+      }
     });
     optimizerDrivesChips.appendChild(chip);
   });
+}
+
+function populateOptimizerFilterDrives() {
+  if (!selectOptimizerFilterDrive) return;
+  const currentVal = optimizerTableDriveFilter;
+  
+  const drivesMap = new Map();
+  optimizerAllCandidates.forEach(c => {
+    const d = c.drive || 'Unknown';
+    if (!drivesMap.has(d)) {
+      drivesMap.set(d, { count: 0, reclaim: 0, size: 0 });
+    }
+    const rec = drivesMap.get(d);
+    rec.count += 1;
+    rec.reclaim += (c.reclaimable_bytes || 0);
+    rec.size += (c.total_size_bytes || 0);
+  });
+
+  const sortedDrives = Array.from(drivesMap.keys()).sort();
+  const totalReclaim = optimizerAllCandidates.reduce((s, x) => s + (x.reclaimable_bytes || 0), 0);
+  let html = `<option value="all">All Audited Drives (${optimizerAllCandidates.length} titles &bull; ${formatBytes(totalReclaim)} reclaimable)</option>`;
+  
+  sortedDrives.forEach(d => {
+    const info = drivesMap.get(d);
+    html += `<option value="${d}">Drive ${d}: (${info.count} titles &bull; ${formatBytes(info.reclaim)} reclaimable)</option>`;
+  });
+
+  selectOptimizerFilterDrive.innerHTML = html;
+  if (sortedDrives.includes(currentVal) || currentVal === 'all') {
+    selectOptimizerFilterDrive.value = currentVal;
+  } else if (optimizerSelectedDrives.size === 1) {
+    const single = Array.from(optimizerSelectedDrives)[0];
+    if (sortedDrives.includes(single)) {
+      selectOptimizerFilterDrive.value = single;
+      optimizerTableDriveFilter = single;
+    }
+  }
+}
+
+function updateFilteredOptimizerStats() {
+  let items = optimizerAllCandidates;
+  if (optimizerTableDriveFilter !== 'all') {
+    items = items.filter(x => x.drive === optimizerTableDriveFilter);
+  }
+  if (optimizerActiveCategory !== 'all') {
+    items = items.filter(x => x.type === optimizerActiveCategory);
+  }
+
+  const totalTitles = items.length;
+  const totalFiles = items.reduce((sum, x) => sum + (x.file_count || 0), 0);
+  const totalStorage = items.reduce((sum, x) => sum + (x.total_size_bytes || 0), 0);
+  const totalReclaim = items.reduce((sum, x) => sum + (x.reclaimable_bytes || 0), 0);
+  const reclaimPct = totalStorage > 0 ? ((totalReclaim / totalStorage) * 100).toFixed(1) : '0.0';
+  const highPrioCount = items.filter(x => x.priority === 'High').length;
+  
+  const qsvEpisodes = items.reduce((sum, x) => sum + (x.reclaimable_bytes > 0 ? (x.file_count || 0) : 0), 0);
+  const qsvHours = (qsvEpisodes * 5.0 / 60.0).toFixed(1);
+
+  const elStorage = document.getElementById('opt-stat-total-storage');
+  if (elStorage) elStorage.textContent = formatBytes(totalStorage);
+
+  const elFiles = document.getElementById('opt-stat-total-files');
+  if (elFiles) {
+    const driveLabel = optimizerTableDriveFilter === 'all' ? 'across library' : `on Drive ${optimizerTableDriveFilter}:`;
+    elFiles.textContent = `${totalFiles} files in ${totalTitles} titles ${driveLabel}`;
+  }
+
+  const elReclaim = document.getElementById('opt-stat-total-reclaim');
+  if (elReclaim) elReclaim.textContent = formatBytes(totalReclaim);
+
+  const elReclaimPct = document.getElementById('opt-stat-reclaim-pct');
+  if (elReclaimPct) elReclaimPct.textContent = `${reclaimPct}% overall space savings`;
+
+  const elHighPrio = document.getElementById('opt-stat-high-priority');
+  if (elHighPrio) elHighPrio.textContent = `${highPrioCount} Titles`;
+
+  const elQsvTime = document.getElementById('opt-stat-qsv-time');
+  if (elQsvTime) elQsvTime.textContent = `Est. ~${qsvHours} Hours Total with QSV`;
+
+  // Codec distribution for this filtered slice
+  const dist = {
+    'AVC / H.264': 0,
+    'HEVC / H.265': 0,
+    'AV1': 0,
+    'MPEG-2 / VC-1': 0,
+    'Other': 0
+  };
+  items.forEach(it => {
+    const vc = (it.primary_video_codec || '').toUpperCase();
+    const count = it.file_count || 1;
+    if (vc.includes('AVC') || vc.includes('H.264') || vc.includes('H264')) {
+      dist['AVC / H.264'] += count;
+    } else if (vc.includes('HEVC') || vc.includes('H.265') || vc.includes('H265')) {
+      dist['HEVC / H.265'] += count;
+    } else if (vc.includes('AV1')) {
+      dist['AV1'] += count;
+    } else if (vc.includes('MPEG') || vc.includes('VC-1') || vc.includes('VC1')) {
+      dist['MPEG-2 / VC-1'] += count;
+    } else {
+      dist['Other'] += count;
+    }
+  });
+
+  renderCodecDistributionBar(dist);
 }
 
 async function fetchOptimizerStatus() {
@@ -2627,26 +2787,8 @@ function showOptimizerResults(data) {
   optimizerDistributionContainer.classList.remove('hidden');
   optimizerFilterBar.classList.remove('hidden');
 
-  const st = data.stats || {};
-  const elStorage = document.getElementById('opt-stat-total-storage');
-  if (elStorage) elStorage.textContent = st.total_storage_human || data.total_bytes_human || '0.00 TB';
-
-  const elFiles = document.getElementById('opt-stat-total-files');
-  if (elFiles) elFiles.textContent = `${st.total_files || data.total_files_scanned} files in ${data.total_candidates} titles`;
-
-  const elReclaim = document.getElementById('opt-stat-total-reclaim');
-  if (elReclaim) elReclaim.textContent = st.total_reclaimable_human || data.total_reclaimable_human || '0.00 TB';
-
-  const elReclaimPct = document.getElementById('opt-stat-reclaim-pct');
-  if (elReclaimPct) elReclaimPct.textContent = `${st.overall_reclaim_pct || data.overall_savings_pct || 0}% overall space savings`;
-
-  const elHighPrio = document.getElementById('opt-stat-high-priority');
-  if (elHighPrio) elHighPrio.textContent = `${st.high_priority_candidates || 0} Titles`;
-
-  const elQsvTime = document.getElementById('opt-stat-qsv-time');
-  if (elQsvTime) elQsvTime.textContent = `Est. ~${st.est_qsv_hours || 0} Hours Total with QSV`;
-
-  renderCodecDistributionBar(st.codec_distribution || {});
+  populateOptimizerFilterDrives();
+  updateFilteredOptimizerStats();
   renderOptimizerTable();
 }
 
@@ -2700,6 +2842,10 @@ function renderOptimizerTable() {
   if (!optimizerItemsTbody) return;
   let items = [...optimizerAllCandidates];
 
+  if (optimizerTableDriveFilter !== 'all') {
+    items = items.filter(x => x.drive === optimizerTableDriveFilter);
+  }
+
   if (optimizerActiveCategory !== 'all') {
     items = items.filter(x => x.type === optimizerActiveCategory);
   }
@@ -2725,7 +2871,8 @@ function renderOptimizerTable() {
   }
 
   if (items.length === 0) {
-    optimizerItemsTbody.innerHTML = '<tr><td colspan="7" class="table-empty">No media items matched the selected filters.</td></tr>';
+    const driveNote = optimizerTableDriveFilter !== 'all' ? ` on Drive ${optimizerTableDriveFilter}:` : '';
+    optimizerItemsTbody.innerHTML = `<tr><td colspan="7" class="table-empty">No media items matched the selected filters${driveNote}.</td></tr>`;
     return;
   }
 
