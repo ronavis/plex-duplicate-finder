@@ -2999,9 +2999,9 @@ function renderOptimizerTable() {
         </td>
         <td style="text-align: center;">
           <div style="display: inline-flex; gap: 4px; justify-content: center; flex-wrap: wrap;">
-            <button type="button" class="btn btn-secondary btn-xs" onclick="runOptimizerTest('${escapeHtml(it.title).replace(/'/g, "\\'")}')" title="Test 60-sec Intel QSV transcode and preview video">⚡ Test</button>
-            <button type="button" class="btn btn-primary btn-xs" style="background: linear-gradient(135deg, #059669, #10B981);" onclick="queueOptimizerTitle('${escapeHtml(it.title).replace(/'/g, "\\'")}')" title="Queue all files in this title for optimization">➕ Queue</button>
-            <button type="button" class="btn btn-secondary btn-xs" onclick="viewOptimizerPreset('${escapeHtml(it.title).replace(/'/g, "\\'")}')" title="View Intel QuickSync transcode profile and command">Preset</button>
+            <button type="button" class="btn btn-secondary btn-xs" onclick="runOptimizerTest(decodeURIComponent('${encodeURIComponent(it.title)}'), decodeURIComponent('${encodeURIComponent(it.id)}'))" title="Test Intel QSV transcode and preview video">⚡ Test</button>
+            <button type="button" class="btn btn-primary btn-xs" style="background: linear-gradient(135deg, #059669, #10B981);" onclick="queueOptimizerTitle(decodeURIComponent('${encodeURIComponent(it.title)}'), decodeURIComponent('${encodeURIComponent(it.id)}'))" title="Queue all files in this title for optimization">➕ Queue</button>
+            <button type="button" class="btn btn-secondary btn-xs" onclick="viewOptimizerPreset(decodeURIComponent('${encodeURIComponent(it.title)}'))" title="View Intel QuickSync transcode profile and command">Preset</button>
           </div>
         </td>
       </tr>
@@ -3057,6 +3057,7 @@ function copyFfmpegCommand() {
 
 let transcodePollTimer = null;
 let currentTestingTitle = null;
+let currentTestingCandidateId = null;
 
 // Tab Switcher Elements
 const tabOptAdvisor = document.getElementById('tab-opt-advisor');
@@ -3217,7 +3218,7 @@ function initTranscodeQueueUI() {
   if (btnModalTestQueueSeries) {
     btnModalTestQueueSeries.addEventListener('click', async () => {
       if (currentTestingTitle) {
-        await queueOptimizerTitle(currentTestingTitle);
+        await queueOptimizerTitle(currentTestingTitle, currentTestingCandidateId);
         closeTestModal();
         switchOptimizerTab('queue');
       }
@@ -3285,9 +3286,11 @@ async function fetchTranscodeStatus() {
 
     // Update Badge
     const pendingCount = data.queue_counts?.pending || 0;
+    const totalCount = data.queue_counts?.total || 0;
     if (optQueueBadge) {
-      optQueueBadge.textContent = pendingCount;
-      optQueueBadge.style.display = pendingCount > 0 ? 'inline-block' : 'none';
+      optQueueBadge.textContent = totalCount;
+      optQueueBadge.style.display = totalCount > 0 ? 'inline-block' : 'none';
+      optQueueBadge.title = `${totalCount} file(s) in queue (${pendingCount} pending)`;
     }
 
     // Update session reclaimed
@@ -3442,18 +3445,19 @@ window.retryQueueJob = async function(jobId) {
   }
 };
 
-window.queueOptimizerTitle = async function(title) {
+window.queueOptimizerTitle = async function(title, candidateId) {
   try {
-    showToast(`Queueing "${title}" for Intel QSV optimization...`);
+    showToast(`Adding "${title}" to transcode queue...`);
     const res = await fetch('/api/transcode/queue/add', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title })
+      body: JSON.stringify({ title, candidate_id: candidateId })
     });
     const data = await res.json();
     if (data.status === 'ok') {
-      showToast(data.message || `Added ${data.added_count} files to queue!`);
-      fetchTranscodeStatus();
+      showToast(data.message || `Added to transcode queue!`);
+      await fetchTranscodeStatus();
+      switchOptimizerTab('queue');
     } else {
       alert(data.message || 'Failed to add title to queue.');
     }
@@ -3475,8 +3479,9 @@ window.removeQueueJob = async function(jobId) {
   }
 };
 
-window.runOptimizerTest = async function(title) {
+window.runOptimizerTest = async function(title, candidateId) {
   currentTestingTitle = title;
+  currentTestingCandidateId = candidateId;
   const activeEncoder = selectTranscodeEncoder ? selectTranscodeEncoder.value : undefined;
   showToast(`Running test transcode snippet on "${title}"...`);
   
@@ -3484,7 +3489,7 @@ window.runOptimizerTest = async function(title) {
     const res = await fetch('/api/transcode/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, duration_sec: 15, encoder: activeEncoder })
+      body: JSON.stringify({ title, candidate_id: candidateId, duration_sec: 15, encoder: activeEncoder })
     });
     const data = await res.json();
 

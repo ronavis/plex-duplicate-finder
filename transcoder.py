@@ -520,17 +520,41 @@ class TranscodeQueueManager:
             }
 
     def add_files_to_queue(self, title: str, files: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Add media files for a title to the queue."""
+        """Add media files for a title to the queue, re-queuing failed/cancelled items if re-added."""
         added = 0
+        requeued = 0
+        already_present = 0
         with self._lock:
-            existing_paths = {j.file_path for j in self.queue}
+            existing_jobs = {os.path.normpath(j.file_path): j for j in self.queue}
             for f in files:
-                p = f.get("path")
-                if not p or p in existing_paths or not os.path.exists(p):
+                raw_p = f.get("path") if isinstance(f, dict) else str(f)
+                if not raw_p:
+                    continue
+                p = os.path.normpath(raw_p)
+
+                # If job already exists in queue
+                if p in existing_jobs:
+                    job = existing_jobs[p]
+                    if job.status in ["failed", "cancelled"]:
+                        job.status = "pending"
+                        job.error_message = None
+                        job.progress_pct = 0.0
+                        job.current_fps = 0.0
+                        job.current_speed = "0.0x"
+                        job.eta_seconds = 0
+                        requeued += 1
+                    else:
+                        already_present += 1
                     continue
 
-                sz = f.get("size_bytes") or os.path.getsize(p)
-                proj = int(sz * 0.35)  # estimate ~65% reduction
+                sz = f.get("size_bytes", 0) if isinstance(f, dict) else 0
+                if not sz:
+                    try:
+                        sz = os.path.getsize(p)
+                    except Exception:
+                        sz = 0
+
+                proj = int(sz * 0.35) if sz > 0 else 0
                 job_id = f"job_{int(time.time()*1000)}_{added}"
                 job = TranscodeJob(
                     job_id=job_id,
@@ -540,15 +564,28 @@ class TranscodeQueueManager:
                     projected_size_bytes=proj
                 )
                 self.queue.append(job)
-                existing_paths.add(p)
+                existing_jobs[p] = job
                 added += 1
 
             self._save_state()
 
+        if added > 0:
+            msg = f"Added {added} file(s) to transcode queue."
+            if requeued > 0:
+                msg += f" (Reset {requeued} previously failed file(s) to pending)."
+        elif requeued > 0:
+            msg = f"Reset {requeued} previously failed file(s) to pending in the queue."
+        elif already_present > 0:
+            msg = f"'{title}' is already in the transcode queue."
+        else:
+            msg = f"No eligible media files found for '{title}'."
+
         return {
             "status": "ok",
-            "message": f"Added {added} file(s) to transcode queue.",
+            "message": msg,
             "added_count": added,
+            "requeued_count": requeued,
+            "already_present_count": already_present,
             "total_queue": len(self.queue)
         }
 

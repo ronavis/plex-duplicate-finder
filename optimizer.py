@@ -10,6 +10,8 @@ import os
 import time
 import json
 import threading
+import html
+import re
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
@@ -451,7 +453,7 @@ class SpaceOptimizer:
                     "is_lossless_audio": g["is_lossless_audio"],
                     "sample_path": g["sample_path"],
                     "reasons": list(g["reasons"])[:3],
-                    "file_samples": g["files"][:5]
+                    "file_samples": g["files"]
                 })
 
             # Sort by highest reclaimable bytes first
@@ -509,7 +511,7 @@ class SpaceOptimizer:
         Generate tailored Intel QuickSync (QSV) FFmpeg command line and Handbrake/Tdarr
         preset configurations for the user's Intel N150 processor.
         """
-        target_item = next((x for x in self.results if x["title"].lower() == item_title.lower()), None)
+        target_item = self.get_candidate(item_title)
         path = file_path or (target_item["sample_path"] if target_item else r"C:\path\to\media.mkv")
         output_path = str(Path(path).with_name(f"{Path(path).stem}.optimized.mkv"))
 
@@ -551,66 +553,82 @@ class SpaceOptimizer:
             "estimated_space_reduction": "60% - 70%"
         }
 
-    def get_files_for_title(self, title: str) -> List[Dict[str, Any]]:
-        """Return all media file items for a candidate title."""
-        target_cand = None
+    def get_candidate(self, title_or_id: str) -> Optional[Dict[str, Any]]:
+        """Find candidate in results by exact ID, title, path, or smart normalized search."""
+        if not title_or_id:
+            return None
+            
+        raw = str(title_or_id).strip()
+        
+        # 1. Exact ID or Title match
         for c in self.results:
-            if c.get("title") == title:
-                target_cand = c
-                break
+            if c.get("id") == raw or c.get("title") == raw:
+                return c
+                
+        # 2. Case-insensitive exact match
+        raw_lower = raw.lower()
+        for c in self.results:
+            if c.get("id", "").lower() == raw_lower or c.get("title", "").lower() == raw_lower:
+                return c
+                
+        # 3. Path match (sample_path or any file sample)
+        for c in self.results:
+            if raw in c.get("sample_path", ""):
+                return c
+            for f in c.get("file_samples", []):
+                if isinstance(f, dict) and raw in f.get("path", ""):
+                    return c
+                    
+        # 4. Normalized match (handles HTML unescape, dots, dashes, underscores, punctuation, spaces)
+        def _norm(s):
+            if not s:
+                return ""
+            s = html.unescape(str(s))
+            s = re.sub(r'[\._\-\+]', ' ', s)
+            s = re.sub(r'[^\w\s]', '', s)
+            return re.sub(r'\s+', ' ', s).strip().lower()
+            
+        qn = _norm(raw)
+        if qn:
+            # 4a. Exact normalized match
+            for c in self.results:
+                if _norm(c.get("title")) == qn or _norm(c.get("id")) == qn:
+                    return c
+            # 4b. Starts-with normalized match
+            for c in self.results:
+                if _norm(c.get("title")).startswith(qn) or _norm(c.get("id")).startswith(qn):
+                    return c
+            # 4c. Substring normalized match
+            for c in self.results:
+                if qn in _norm(c.get("title")) or qn in _norm(c.get("id")):
+                    return c
+                    
+        return None
+
+    def get_files_for_title(self, title_or_id: str) -> List[Dict[str, Any]]:
+        """Return all media file items for a candidate title or ID without blocking disk operations."""
+        target_cand = self.get_candidate(title_or_id)
         if not target_cand:
             return []
 
-        # If candidate already has file list
-        if "files" in target_cand and target_cand["files"]:
+        # 1. Prefer already-audited file_samples or files list (0 disk I/O, instant)
+        if target_cand.get("file_samples"):
+            return target_cand["file_samples"]
+        if target_cand.get("files"):
             return target_cand["files"]
 
-        # Otherwise discover files from sample path's parent series/movie folder
+        # 2. Fallback to sample_path
         sample = target_cand.get("sample_path", "")
-        if not sample or not os.path.exists(sample):
-            return target_cand.get("file_samples", [])
-
-        p_sample = Path(sample)
-        # If standalone movie directly in Movies root, return just this single file
-        if target_cand.get("type") in ["movie", "movies"] and p_sample.parent.name.lower() in ["movies", "movie", "plex movies"]:
-            try:
-                sz = os.path.getsize(sample)
-            except Exception:
-                sz = 0
+        if sample:
+            sz = target_cand.get("total_size_bytes", 0)
             return [{
                 "path": sample,
-                "name": p_sample.name,
+                "name": os.path.basename(sample),
                 "size_bytes": sz,
-                "size_human": scanner.format_bytes(sz)
+                "size_human": target_cand.get("total_size_human") or scanner.format_bytes(sz)
             }]
 
-        # If TV show, parent might be Season folder, so grandparent is series folder
-        search_root = p_sample.parent
-        if "season" in search_root.name.lower():
-            search_root = search_root.parent
-
-        found_files = []
-        MEDIA_EXTS = {".mkv", ".mp4", ".avi", ".m4v", ".ts", ".mov"}
-        for root, _, files in os.walk(search_root):
-            for f in files:
-                f_lower = f.lower()
-                if f_lower.endswith(".tmp_opt.mkv") or ".tmp" in f_lower or f.startswith("."):
-                    continue
-                ext = os.path.splitext(f)[1].lower()
-                if ext in MEDIA_EXTS:
-                    full_p = os.path.join(root, f)
-                    try:
-                        sz = os.path.getsize(full_p)
-                    except Exception:
-                        sz = 0
-                    found_files.append({
-                        "path": full_p,
-                        "name": f,
-                        "size_bytes": sz,
-                        "size_human": scanner.format_bytes(sz)
-                    })
-
-        return found_files if found_files else target_cand.get("file_samples", [])
+        return []
 
 
 # Global singleton instance

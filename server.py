@@ -672,12 +672,34 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
 
         # Transcoder Queue Management & Worker Controls
         elif path == "/api/transcode/queue/add":
-            title = body.get("title", "Media Title")
-            files = body.get("files", [])
-            if not files:
-                files = optimizer.space_optimizer.get_files_for_title(title)
-            res = transcoder.transcode_manager.add_files_to_queue(title, files)
-            self._send_json(200, res)
+            try:
+                title = body.get("title", "Media Title")
+                cand_id = body.get("candidate_id") or body.get("id")
+                files = body.get("files", [])
+                
+                target_cand = None
+                if cand_id:
+                    target_cand = optimizer.space_optimizer.get_candidate(cand_id)
+                if not target_cand and title:
+                    target_cand = optimizer.space_optimizer.get_candidate(title)
+
+                if not files:
+                    if target_cand:
+                        files = target_cand.get("file_samples") or target_cand.get("files") or []
+                        if not files and target_cand.get("sample_path"):
+                            files = [{
+                                "path": target_cand["sample_path"],
+                                "name": os.path.basename(target_cand["sample_path"]),
+                                "size_bytes": target_cand.get("total_size_bytes", 0)
+                            }]
+                    else:
+                        files = optimizer.space_optimizer.get_files_for_title(cand_id or title)
+
+                display_title = target_cand.get("title") if target_cand else title
+                res = transcoder.transcode_manager.add_files_to_queue(display_title, files)
+                self._send_json(200, res)
+            except Exception as e:
+                self._send_json(500, {"status": "error", "message": f"Error adding to queue: {str(e)}"})
 
         elif path == "/api/transcode/queue/remove":
             job_id = body.get("job_id", "")
@@ -715,9 +737,10 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
         elif path == "/api/transcode/test":
             file_path = body.get("file_path", "")
             title = body.get("title", "")
+            cand_id = body.get("candidate_id") or body.get("id")
             encoder = body.get("encoder")
-            if not file_path and title:
-                files = optimizer.space_optimizer.get_files_for_title(title)
+            if not file_path:
+                files = optimizer.space_optimizer.get_files_for_title(cand_id or title)
                 if files:
                     file_path = files[0].get("path", "")
             if not file_path:
