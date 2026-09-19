@@ -355,10 +355,9 @@ class SpaceOptimizer:
                     audio_counts["Other"] += 1
 
                 # Grouping key: parent show or movie directory
+                # Grouping key: parent show or movie directory
                 p_obj = Path(f_path)
                 parts = p_obj.parts
-                # For TV: Drive:\TV\ShowName\Season X\file.mkv -> group by ShowName
-                # For Movies: Drive:\Movies\MovieName (Year)\file.mkv -> group by MovieName
                 group_name = p_obj.stem
                 if len(parts) >= 3:
                     if not is_mov and any("season" in part.lower() for part in parts):
@@ -366,6 +365,14 @@ class SpaceOptimizer:
                         idx_season = next(i for i, part in enumerate(parts) if "season" in part.lower())
                         if idx_season > 0:
                             group_name = parts[idx_season - 1]
+                    elif is_mov:
+                        # For Movies: if direct child of "Movies" root, use filename stem.
+                        # If inside a movie subfolder "Movies\Movie (Year)\file.mkv", use subfolder name.
+                        parent_name = parts[-2]
+                        if parent_name.lower() in ["movies", "movie", "plex movies"]:
+                            group_name = p_obj.stem
+                        else:
+                            group_name = parent_name
                     else:
                         group_name = parts[-2]
 
@@ -375,7 +382,7 @@ class SpaceOptimizer:
                     grouped_candidates[group_name] = {
                         "id": f"opt_{drive_letter}_{group_name.replace(' ', '_')}",
                         "title": group_name,
-                        "type": "movie" if is_mov else "tv",
+                        "type": "movies" if is_mov else "tv",
                         "drive": drive_letter,
                         "file_count": 0,
                         "total_size_bytes": 0,
@@ -564,6 +571,19 @@ class SpaceOptimizer:
             return target_cand.get("file_samples", [])
 
         p_sample = Path(sample)
+        # If standalone movie directly in Movies root, return just this single file
+        if target_cand.get("type") in ["movie", "movies"] and p_sample.parent.name.lower() in ["movies", "movie", "plex movies"]:
+            try:
+                sz = os.path.getsize(sample)
+            except Exception:
+                sz = 0
+            return [{
+                "path": sample,
+                "name": p_sample.name,
+                "size_bytes": sz,
+                "size_human": scanner.format_bytes(sz)
+            }]
+
         # If TV show, parent might be Season folder, so grandparent is series folder
         search_root = p_sample.parent
         if "season" in search_root.name.lower():

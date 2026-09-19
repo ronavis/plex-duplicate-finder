@@ -2616,7 +2616,13 @@ function updateFilteredOptimizerStats() {
     items = items.filter(x => x.drive === optimizerTableDriveFilter);
   }
   if (optimizerActiveCategory !== 'all') {
-    items = items.filter(x => x.type === optimizerActiveCategory);
+    items = items.filter(x => {
+      const itType = (x.type || '').toLowerCase();
+      const cat = optimizerActiveCategory.toLowerCase();
+      if (cat === 'movies' || cat === 'movie') return itType === 'movie' || itType === 'movies';
+      if (cat === 'tv' || cat === 'tv shows') return itType === 'tv';
+      return itType === cat;
+    });
   }
 
   const totalTitles = items.length;
@@ -2847,7 +2853,13 @@ function renderOptimizerTable() {
   }
 
   if (optimizerActiveCategory !== 'all') {
-    items = items.filter(x => x.type === optimizerActiveCategory);
+    items = items.filter(x => {
+      const itType = (x.type || '').toLowerCase();
+      const cat = optimizerActiveCategory.toLowerCase();
+      if (cat === 'movies' || cat === 'movie') return itType === 'movie' || itType === 'movies';
+      if (cat === 'tv' || cat === 'tv shows') return itType === 'tv';
+      return itType === cat;
+    });
   }
 
   if (optimizerActivePriority === 'high') {
