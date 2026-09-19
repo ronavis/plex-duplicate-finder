@@ -283,8 +283,86 @@ def check_qsv_support(ffmpeg_path: str) -> bool:
         return False
 
 
+def verify_file_readable(file_path: str) -> Tuple[bool, Optional[str]]:
+    """Test opening and reading the first sector of a file to catch Win32 I/O errors immediately."""
+    if not os.path.exists(file_path):
+        return False, f"File does not exist: {file_path}"
+
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            from ctypes import wintypes
+            GENERIC_READ = 0x80000000
+            FILE_SHARE_READ = 1
+            FILE_SHARE_WRITE = 2
+            OPEN_EXISTING = 3
+            FILE_ATTRIBUTE_NORMAL = 0x80
+
+            handle = ctypes.windll.kernel32.CreateFileW(
+                file_path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, None, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, None
+            )
+            if handle in (-1, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFF, 4294967295, 18446744073709551615):
+                err = ctypes.GetLastError()
+                if err == 1117:
+                    return False, "Physical drive read error (WinError 1117: ERROR_IO_DEVICE). The external drive requires reconnecting or repair."
+                return False, f"Cannot open file (WinError {err})."
+
+            buf = ctypes.create_string_buffer(4096)
+            bytes_read = wintypes.DWORD()
+            ok = ctypes.windll.kernel32.ReadFile(handle, buf, 4096, ctypes.byref(bytes_read), None)
+            err = ctypes.GetLastError() if not ok else 0
+            ctypes.windll.kernel32.CloseHandle(handle)
+
+            if not ok:
+                if err == 1117:
+                    return False, "Physical drive read error (WinError 1117: ERROR_IO_DEVICE). Volume status requires repair (run chkdsk) or drive was disconnected."
+                return False, f"Cannot read file data (WinError {err})."
+            return True, None
+        except Exception as e:
+            logger.debug(f"Win32 check exception: {e}")
+
+    try:
+        with open(file_path, "rb") as f:
+            f.read(1024)
+        return True, None
+    except OSError as e:
+        if getattr(e, "winerror", None) == 1117 or getattr(e, "errno", None) == 22 or "I/O device error" in str(e):
+            return False, "Physical drive read error (WinError 1117: ERROR_IO_DEVICE). Volume requires repair (run chkdsk) or drive was disconnected."
+        return False, f"File read error: {e}"
+
+
+def get_transcode_staging_path(orig_path: str, orig_size_bytes: int = 0) -> Tuple[str, bool]:
+    """
+    Determine the optimal output path for transcoding:
+    - If source is on an external drive, writing the output across the same USB bus while reading
+      causes high I/O latency and buffer starvation.
+    - If local fast drive (C:) or high-capacity SSD has sufficient free space (> 1.5x expected output),
+      stage the temp output on local storage.
+    - Returns (temp_path, is_staged_locally).
+    """
+    stem = Path(orig_path).stem
+    temp_filename = f"{stem}.tmp_opt_{int(time.time())}.mkv"
+    default_temp = orig_path + ".tmp_opt.mkv"
+    source_drive = os.path.splitdrive(orig_path)[0].upper()
+
+    if source_drive in ("C:", ""):
+        return default_temp, False
+
+    local_staging_dir = os.path.join(os.environ.get("LOCALAPPDATA", "C:\\Temp"), "PlexTranscodeStaging")
+    try:
+        os.makedirs(local_staging_dir, exist_ok=True)
+        usage = shutil.disk_usage(local_staging_dir)
+        needed_bytes = int(orig_size_bytes * 0.6) + (10 * 1024 * 1024 * 1024)
+        if usage.free > needed_bytes:
+            return os.path.join(local_staging_dir, temp_filename), True
+    except Exception as e:
+        logger.debug(f"Local staging path error: {e}")
+
+    return default_temp, False
+
+
 def get_media_info(ffprobe_path: str, file_path: str) -> Optional[Dict[str, Any]]:
-    """Extract format and stream metadata using ffprobe."""
+    """Extract format and stream metadata using ffprobe with 30s timeout for mechanical spin-up."""
     if not ffprobe_path or not os.path.exists(file_path):
         return None
     try:
@@ -295,9 +373,11 @@ def get_media_info(ffprobe_path: str, file_path: str) -> Optional[Dict[str, Any]
             "-of", "json",
             file_path
         ]
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
         if proc.returncode == 0:
             return json.loads(proc.stdout)
+    except subprocess.TimeoutExpired:
+        logger.warning(f"ffprobe timed out after 30s on {file_path}")
     except Exception as e:
         logger.warning(f"ffprobe error on {file_path}: {e}")
     return None
@@ -412,7 +492,8 @@ class TranscodeJob:
 class TranscodeQueueManager:
     """Manages the background transcode queue, workers, and integrity verification."""
 
-    def __init__(self):
+    def __init__(self, state_file: str = QUEUE_STATE_FILE):
+        self.state_file = state_file
         self.queue: List[TranscodeJob] = []
         self.active_job: Optional[TranscodeJob] = None
         self.is_running = False
@@ -437,10 +518,10 @@ class TranscodeQueueManager:
 
     def _load_state(self):
         """Restore queue state from disk if available."""
-        if not os.path.exists(QUEUE_STATE_FILE):
+        if not os.path.exists(self.state_file):
             return
         try:
-            with open(QUEUE_STATE_FILE, "r", encoding="utf-8") as f:
+            with open(self.state_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 self.safety_mode = data.get("safety_mode", "recycle_bin")
                 self.quality_preset = data.get("quality_preset", "balanced")
@@ -475,7 +556,7 @@ class TranscodeQueueManager:
     def _save_state(self):
         """Save queue state to disk."""
         try:
-            with open(QUEUE_STATE_FILE, "w", encoding="utf-8") as f:
+            with open(self.state_file, "w", encoding="utf-8") as f:
                 json.dump({
                     "safety_mode": self.safety_mode,
                     "quality_preset": self.quality_preset,
@@ -652,6 +733,18 @@ class TranscodeQueueManager:
             return {"status": "error", "message": "FFmpeg not detected on system."}
 
         with self._lock:
+            pending_jobs = [j for j in self.queue if j.status == "pending"]
+            if not pending_jobs:
+                if any(j.status == "failed" for j in self.queue):
+                    return {
+                        "status": "error",
+                        "message": "All items in queue have failed. Click the retry icon (🔄) on a job or add new items with '+ Queue' before starting."
+                    }
+                return {
+                    "status": "error",
+                    "message": "Transcode queue is empty. Please add items using '+ Queue' in the Advisor tab first."
+                }
+
             self.is_paused = False
             if self.is_running and self._worker_thread and self._worker_thread.is_alive():
                 return {"status": "ok", "message": "Transcode queue resumed."}
@@ -660,7 +753,7 @@ class TranscodeQueueManager:
             self._worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
             self._worker_thread.start()
 
-        return {"status": "ok", "message": "Transcode queue worker started."}
+        return {"status": "ok", "message": f"Transcode queue worker started ({len(pending_jobs)} pending item(s))."}
 
     def pause_queue(self) -> Dict[str, Any]:
         """Pause queue execution after current file finishes."""
@@ -718,20 +811,16 @@ class TranscodeQueueManager:
     def _process_single_job(self, job: TranscodeJob):
         """Execute FFmpeg transcoding on an individual file with verification."""
         orig_path = job.file_path
-        try:
-            if not os.path.exists(orig_path):
-                job.status = "failed"
-                job.error_message = f"File not found on drive {job.drive}: ({job.filename})"
-                return
-        except OSError as e:
+
+        # 0. Pre-flight read verification to instantly catch Win32 I/O errors
+        is_readable, read_err = verify_file_readable(orig_path)
+        if not is_readable:
             job.status = "failed"
-            if getattr(e, 'winerror', None) == 1117 or "I/O device error" in str(e):
-                job.error_message = f"Drive I/O error on {job.drive}: (WinError 1117). External USB drive may need reconnecting or checking."
-            else:
-                job.error_message = f"Drive access error on {job.drive}: {str(e)}"
+            job.error_message = f"Drive read error on {job.drive}: {read_err}"
+            logger.error(f"Pre-flight check failed for {orig_path}: {read_err}")
             return
 
-        temp_out = orig_path + ".tmp_opt.mkv"
+        temp_out, is_staged = get_transcode_staging_path(orig_path, job.original_size_bytes)
         if os.path.exists(temp_out):
             try:
                 os.remove(temp_out)
@@ -859,7 +948,9 @@ class TranscodeQueueManager:
             if process.returncode != 0:
                 err_text = "".join(list(stderr_lines)[-15:]) if stderr_lines else "Unknown error"
                 job.status = "failed"
-                if process.returncode in (4294967274, -22) or "I/O error" in err_text or "Input/output error" in err_text:
+                if process.returncode in (4294967274, -22) or "Invalid argument" in err_text:
+                    job.error_message = f"Drive I/O error on {job.drive}: (WinError 1117 / Invalid argument). The physical disk reported an I/O device error or needs repair."
+                elif "I/O error" in err_text or "Input/output error" in err_text:
                     job.error_message = f"Drive I/O interruption on {job.drive}: (USB read/write latency timeout or disconnect)."
                 else:
                     job.error_message = f"FFmpeg failed (code {process.returncode}): {err_text[:300]}"
@@ -980,6 +1071,15 @@ class TranscodeQueueManager:
             return {"status": "error", "message": "FFmpeg not detected on system."}
         if not os.path.exists(file_path):
             return {"status": "error", "message": f"File not found: {file_path}"}
+
+        # Pre-flight read verification to instantly catch Win32 I/O errors without timeout
+        is_readable, read_err = verify_file_readable(file_path)
+        if not is_readable:
+            drv = os.path.splitdrive(file_path)[0]
+            return {
+                "status": "error",
+                "message": f"Drive read error on {drv}: {read_err}"
+            }
 
         active_encoder = encoder if (encoder and any(e["id"] == encoder for e in self.available_encoders)) else self.selected_encoder
         video_args, target_codec = get_encoder_video_args(active_encoder, self.quality_preset)

@@ -13,8 +13,32 @@ import transcoder
 class TestTranscoder(unittest.TestCase):
 
     def setUp(self):
-        self.mgr = transcoder.TranscodeQueueManager()
+        self.test_state = os.path.join("scratch", "test_transcode_queue.json")
+        os.makedirs("scratch", exist_ok=True)
+        self.mgr = transcoder.TranscodeQueueManager(state_file=self.test_state)
         self.mgr.clear_queue()
+
+    def tearDown(self):
+        if hasattr(self, 'test_state') and os.path.exists(self.test_state):
+            try:
+                os.remove(self.test_state)
+            except Exception:
+                pass
+
+    def test_start_queue_empty_error(self):
+        res = self.mgr.start_queue()
+        self.assertEqual(res["status"], "error")
+        self.assertIn("empty", res["message"].lower())
+
+    def test_verify_file_readable_nonexistent(self):
+        ok, err = transcoder.verify_file_readable("C:\\nonexistent_file_xyz.mkv")
+        self.assertFalse(ok)
+        self.assertIn("does not exist", err)
+
+    def test_staging_path_generation(self):
+        path, is_staged = transcoder.get_transcode_staging_path("R:\\Movies\\Test.mkv", 1000000)
+        self.assertTrue(path.endswith(".mkv"))
+        self.assertNotEqual(path, "R:\\Movies\\Test.mkv")
 
     def test_find_binaries(self):
         ff, pr = transcoder.find_binaries()
@@ -33,7 +57,6 @@ class TestTranscoder(unittest.TestCase):
             {"path": "C:\\fake\\episode1.mkv", "size_bytes": 1000000000},
             {"path": "C:\\fake\\episode2.mkv", "size_bytes": 2000000000},
         ]
-        # Since files don't exist, we test manual TranscodeJob creation
         job1 = transcoder.TranscodeJob("j1", "Show A", "C:\\fake\\ep1.mkv", 1000000000)
         job2 = transcoder.TranscodeJob("j2", "Show A", "C:\\fake\\ep2.mkv", 2000000000)
         self.mgr.queue.append(job1)
