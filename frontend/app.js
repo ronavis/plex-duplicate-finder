@@ -407,7 +407,7 @@ function setupEventListeners() {
   if (checkMigratorTurbo) {
     checkMigratorTurbo.addEventListener('change', () => {
       if (btnMigratorStart) {
-        btnMigratorStart.textContent = checkMigratorTurbo.checked ? '⚡ Start Turbo Migration' : '🚀 Start Safe Migration';
+        btnMigratorStart.textContent = checkMigratorTurbo.checked ? '⚡ Start Turbo Migration' : '🛡️ Start Safe Migration';
       }
     });
   }
