@@ -2333,7 +2333,7 @@ body {
   flex: 1 1 0%;
   min-height: 0;
   gap: 8px;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 /* Collapsible Setup Accordion */
@@ -2732,6 +2732,53 @@ body {
   color: var(--text-secondary);
 }
 
+/* Batch Queue & Selection Strip */
+.optimizer-batch-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+  flex-shrink: 0;
+}
+
+.batch-strip-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.batch-strip-summary {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.batch-strip-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-icon-compact {
+  padding: 4px 7px !important;
+  font-size: 0.72rem !important;
+  line-height: 1 !important;
+  border-radius: 4px !important;
+}
+
+.opt-actions-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
 /* Results Table - Maximum Visible Vertical Space */
 .optimizer-table-wrapper {
   background: #0d111a;
@@ -3106,3 +3153,311 @@ body {
 
 
 
+.hidden-desktop {
+  display: none;
+}
+
+/* --- Mobile Responsive Enhancements --- */
+@media (max-width: 900px) {
+  body, html {
+    overflow-x: hidden !important;
+    padding: 6px;
+    width: 100vw;
+    margin: 0;
+  }
+  .app-container {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+  .app-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    padding: 16px;
+    width: 100%;
+    position: relative;
+    z-index: 99999;
+  }
+  
+  /* Header & Navigation Hamburger */
+  .hidden-desktop {
+    display: block !important;
+  }
+  .btn-mobile-menu {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    margin-left: auto;
+  }
+  .brand-section {
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+  }
+  .brand-title {
+    font-size: 1.15rem;
+    white-space: normal;
+  }
+  .brand-subtitle {
+    display: none; /* Hide on mobile for space */
+  }
+  
+  .header-nav-actions {
+    display: none; /* Hidden by default */
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(10, 13, 20, 0.98);
+    backdrop-filter: blur(16px);
+    z-index: 9999;
+    flex-direction: column;
+    padding: 80px 24px 24px 24px;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 16px;
+  }
+  .header-nav-actions.menu-open {
+    display: flex;
+  }
+  .header-nav-actions .btn {
+    font-size: 1.1rem;
+    padding: 18px;
+    width: 100%;
+    justify-content: center;
+    border-radius: 12px;
+  }
+  
+  /* Stat Pills 2x2 Grid */
+  .header-right-group {
+    width: 100%;
+  }
+  .header-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+  .stat-pill {
+    width: 100%;
+    align-items: flex-start;
+    padding: 10px;
+  }
+  .stat-val { font-size: 1rem; }
+  .stat-label { font-size: 0.65rem; }
+
+  /* Redesigned Drive Cards (2-column square grid) */
+  .drives-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .drive-card {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .drive-card-top {
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .drive-card-header-left {
+    flex-direction: column;
+    gap: 2px;
+  }
+  .drive-letter-badge {
+    font-size: 1.4rem;
+  }
+  .drive-label {
+    white-space: normal !important;
+    font-size: 0.75rem;
+  }
+  .drive-capacity-bar {
+    margin: 8px 0;
+    width: 100%;
+  }
+  .drive-capacity-text {
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-size: 0.65rem;
+  }
+  .drive-card-checkbox {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+  }
+
+  .section-card {
+    padding: 12px;
+    width: 100%;
+  }
+  .section-header {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .section-title-group {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 100%;
+  }
+  .section-title-group h2 {
+    white-space: normal !important;
+    text-align: center;
+  }
+  .section-actions, .results-actions, .scan-controls-bar, .scan-button-group {
+    flex-direction: column;
+    width: 100%;
+    align-items: stretch;
+  }
+  .section-actions .btn, .results-actions .btn, .scan-controls-bar .btn, .scan-button-group .btn {
+    width: 100%;
+    justify-content: center;
+    white-space: normal;
+  }
+  .pool-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .duplicate-group {
+    padding: 12px;
+  }
+  .group-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .group-header-actions {
+    width: 100%;
+    margin-top: 10px;
+    flex-direction: column;
+  }
+  .duplicate-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .duplicate-details {
+    width: 100%;
+  }
+  .duplicate-actions {
+    align-items: stretch;
+    width: 100%;
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .modal-card {
+    width: 95%;
+    margin: 10px;
+    max-height: 95vh;
+  }
+  .search-filter-toolbar, .filter-dropdown-group, .migrator-controls-bar, .migrator-control-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .search-input-wrapper {
+    min-width: 100%;
+  }
+  
+  /* Optimizer Mobile Fixes */
+  .optimizer-setup-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .setup-header-left {
+    flex-wrap: wrap;
+  }
+  .optimizer-options-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .optimizer-control-actions {
+    margin-left: 0;
+    width: 100%;
+    flex-direction: column;
+  }
+  .optimizer-control-actions .btn {
+    width: 100%;
+    white-space: normal !important;
+  }
+  
+  * {
+    word-break: break-word;
+    box-sizing: border-box;
+  }
+  .progress-current-path, .duplicate-filename, .audit-path, .balancer-sourcepath, .balancer-filename, .file-name, .file-parent {
+    white-space: normal !important;
+  }
+  .migrator-table-wrapper, .audit-table-container, .optimizer-table-wrapper {
+    overflow-x: auto;
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+  table {
+    min-width: 800px; /* Force tables to be wide enough to read */
+  }
+  table th, table td {
+    white-space: nowrap !important; /* Prevent text squishing into tall slivers */
+  }
+
+  /* Modal Global Overrides */
+  .modal-header {
+    flex-direction: column;
+    align-items: flex-start;
+    position: relative;
+    padding-right: 40px;
+  }
+  .modal-title {
+    flex-wrap: wrap;
+    line-height: 1.3;
+  }
+  .modal-header-actions {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+  }
+  #opt-hardware-badge {
+    margin-left: 0 !important;
+    margin-top: 8px;
+    display: block;
+    width: fit-content;
+  }
+  .optimizer-stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .opt-nav-tab {
+    padding: 8px;
+    font-size: 0.8rem;
+    white-space: normal;
+    text-align: center;
+  }
+
+  /* Duplicate List Mobile Overrides */
+  .file-row {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 12px;
+    gap: 6px;
+    height: auto;
+  }
+  .file-path-col {
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .file-badges {
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .file-actions-cell {
+    width: 100%;
+    margin-top: 8px;
+  }
+}

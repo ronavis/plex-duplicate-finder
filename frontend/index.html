@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
   <div class="app-container">
@@ -25,6 +25,10 @@
           <h1 class="brand-title">Plex Space Reclaimer</h1>
           <p class="brand-subtitle">Smart multi-drive deduplication for movies & TV series</p>
         </div>
+        
+        <button id="btn-mobile-menu-toggle" class="btn-mobile-menu hidden-desktop" aria-label="Toggle Mobile Menu">
+          <svg viewBox="0 0 24 24" width="28" height="28" stroke="var(--plex-gold)" stroke-width="2.5" fill="none" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
       </div>
 
       <div class="header-right-group">
@@ -216,7 +220,7 @@
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
-            <input type="text" id="input-search-title" placeholder="Search title or folder (e.g. Gladiator, Avatar, S01E02)..." class="search-input">
+            <input type="text" id="input-search-title" placeholder="Search title or folder (e.g. Gladiator, Avatar, S01E02)..." class="search-input" autocomplete="off" spellcheck="false">
             <button id="btn-clear-search" class="search-clear-btn hidden">&times;</button>
           </div>
 
@@ -889,7 +893,16 @@
             <!-- Filter & Search Bar -->
             <div id="optimizer-filter-bar" class="optimizer-filter-bar hidden">
               <input type="text" id="input-optimizer-search" class="input-control" placeholder="Search show or movie title...">
-              <div class="filter-pills">
+
+              <!-- Category Filter: All / Movies / TV Shows -->
+              <div class="filter-pills category-pills">
+                <button type="button" class="btn-filter-pill active" data-optimizer-cat="all">All Media</button>
+                <button type="button" class="btn-filter-pill" data-optimizer-cat="movies">🎬 Movies</button>
+                <button type="button" class="btn-filter-pill" data-optimizer-cat="tv">📺 TV Shows</button>
+              </div>
+
+              <!-- Priority / Codec Filter Pills -->
+              <div class="filter-pills priority-pills">
                 <button type="button" class="btn-filter-pill active" data-prio-filter="all">All Titles</button>
                 <button type="button" class="btn-filter-pill" data-prio-filter="high">High Savings Only</button>
                 <button type="button" class="btn-filter-pill" data-prio-filter="lossless">Lossless Audio Only</button>
@@ -908,6 +921,21 @@
                   <option value="pct_desc">Highest % Reduction</option>
                   <option value="title_asc">Title (A-Z)</option>
                 </select>
+              </div>
+            </div>
+
+            <!-- Batch Queue & Selection Strip -->
+            <div id="optimizer-batch-strip" class="optimizer-batch-strip hidden">
+              <div class="batch-strip-left">
+                <span class="batch-strip-summary" id="optimizer-batch-summary">0 Titles Filtered</span>
+              </div>
+              <div class="batch-strip-right">
+                <button type="button" id="btn-optimizer-queue-all" class="btn btn-primary btn-sm" style="background: linear-gradient(135deg, #059669, #10B981); font-weight: 600;" title="Add all currently filtered, unqueued titles into the transcode queue">
+                  <span>➕ Add All Reclaimable to Queue (<span id="optimizer-queue-all-count">0</span>)</span>
+                </button>
+                <button type="button" id="btn-optimizer-clear-queue" class="btn btn-secondary btn-sm" title="Remove all pending items from transcode queue">
+                  <span>✕ Deselect / Clear Queue</span>
+                </button>
               </div>
             </div>
 
@@ -1012,16 +1040,17 @@
               <table class="optimizer-table">
                 <thead>
                   <tr>
-                    <th style="width: 32%; text-align: left;">Media Item / Filename</th>
-                    <th style="width: 7%; text-align: left;">Drive</th>
-                    <th style="width: 12%; text-align: left;">Original Size</th>
-                    <th style="width: 13%; text-align: left;">Projected Size</th>
-                    <th style="width: 26%; text-align: left;">Status &amp; Progress</th>
-                    <th style="width: 10%; text-align: center;">Action</th>
+                    <th style="width: 25%; text-align: left;">Media Item / Filename</th>
+                    <th style="width: 6%; text-align: left;">Drive</th>
+                    <th style="width: 11%; text-align: left;">Original Size</th>
+                    <th style="width: 11%; text-align: left;">Projected Size</th>
+                    <th style="width: 14%; text-align: left;">Actual Saved</th>
+                    <th style="width: 24%; text-align: left;">Status &amp; Progress</th>
+                    <th style="width: 9%; text-align: center;">Action</th>
                   </tr>
                 </thead>
                 <tbody id="queue-items-tbody">
-                  <tr><td colspan="6" class="table-empty">Transcode queue is empty. Click "+ Queue" on any show or movie in the Advisor tab to add files.</td></tr>
+                  <tr><td colspan="7" class="table-empty">Transcode queue is empty. Click "+ Queue" on any show or movie in the Advisor tab to add files.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -1135,6 +1164,6 @@
     <div id="toast-container" class="toast-container"></div>
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

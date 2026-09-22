@@ -701,6 +701,19 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
             except Exception as e:
                 self._send_json(500, {"status": "error", "message": f"Error adding to queue: {str(e)}"})
 
+        elif path == "/api/transcode/queue/batch_add":
+            try:
+                candidates = body.get("candidates", [])
+                res = transcoder.transcode_manager.add_batch_to_queue(candidates)
+                self._send_json(200, res)
+            except Exception as e:
+                self._send_json(500, {"status": "error", "message": f"Error batch adding to queue: {str(e)}"})
+
+        elif path == "/api/transcode/queue/remove_title":
+            title = body.get("title", "")
+            res = transcoder.transcode_manager.remove_title_from_queue(title)
+            self._send_json(200, res)
+
         elif path == "/api/transcode/queue/remove":
             job_id = body.get("job_id", "")
             res = transcoder.transcode_manager.remove_job(job_id)
@@ -836,18 +849,62 @@ class PlexDedupHandler(SimpleHTTPRequestHandler):
             with open(p, "rb") as f:
                 shutil.copyfileobj(f, self.wfile, length=64 * 1024)
 
+    def handle_one_request(self):
+        """Handle a single HTTP request with graceful disconnect tolerance."""
+        try:
+            super().handle_one_request()
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError, OSError):
+            self.close_connection = True
+
     def _send_json(self, code: int, data: Any):
-        response_bytes = json.dumps(data, indent=2).encode("utf-8")
-        self.send_response(code)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(response_bytes)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.end_headers()
-        self.wfile.write(response_bytes)
+        try:
+            response_bytes = json.dumps(data, indent=2).encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(response_bytes)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(response_bytes)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError, OSError):
+            # Client closed connection prematurely (e.g. mobile backgrounding or tab close)
+            pass
 
     def log_message(self, format, *args):
         """Suppress standard access logs for cleaner console output."""
         return
+
+
+class RobustThreadingHTTPServer(ThreadingHTTPServer):
+    """Threading HTTPServer that disallows dangerous port reuse and cleans up threads cleanly."""
+    allow_reuse_address = False  # Prevents multiple processes silently binding to the same port on Windows
+    daemon_threads = True        # Worker threads exit immediately when main process terminates
+
+
+PID_FILE = Path(__file__).parent / "server.pid"
+
+
+def _cleanup_stale_instance():
+    """Check if an older server instance is running and terminate it cleanly."""
+    curr_pid = os.getpid()
+    if PID_FILE.exists():
+        try:
+            with open(PID_FILE, "r", encoding="utf-8") as f:
+                old_pid = int(f.read().strip())
+            if old_pid != curr_pid:
+                # Check if old process is still alive on Windows
+                cmd = f'taskkill /F /PID {old_pid}'
+                res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                if res.returncode == 0:
+                    print(f"[Server] Cleaned up stale server instance (PID {old_pid}).")
+                time.sleep(0.5)
+        except Exception:
+            pass
+
+    try:
+        with open(PID_FILE, "w", encoding="utf-8") as f:
+            f.write(str(curr_pid))
+    except Exception:
+        pass
 
 
 def run_server():
@@ -855,8 +912,19 @@ def run_server():
         sys.stdout.reconfigure(encoding="utf-8")
     except Exception:
         pass
-    server_address = ("127.0.0.1", PORT)
-    httpd = ThreadingHTTPServer(server_address, PlexDedupHandler)
+
+    _cleanup_stale_instance()
+    server_address = ("0.0.0.0", PORT)
+
+    try:
+        httpd = RobustThreadingHTTPServer(server_address, PlexDedupHandler)
+    except OSError as e:
+        print("=" * 60)
+        print(f"[Server Warning] Could not bind to port {PORT}: {e}")
+        print("Another process is currently holding the port.")
+        print("=" * 60)
+        return
+
     print("=" * 60)
     print("Plex Space Reclaimer Server is running!")
     print(f"Localhost Web UI: http://localhost:{PORT}")
@@ -866,7 +934,13 @@ def run_server():
     except KeyboardInterrupt:
         print("\nShutting down server...")
         httpd.server_close()
+        if PID_FILE.exists():
+            try:
+                PID_FILE.unlink()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
     run_server()
+

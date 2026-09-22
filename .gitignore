@@ -21,6 +21,8 @@ optimization_cache.json
 transcode_queue.json
 scratch/
 _quarantine/
+*.pid
+
 
 # Windows system files
 Thumbs.db

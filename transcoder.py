@@ -683,6 +683,74 @@ class TranscodeQueueManager:
 
         return {"status": "ok", "message": "Job removed from queue."}
 
+    def remove_title_from_queue(self, title: str) -> Dict[str, Any]:
+        """Remove all non-running queue items for a given title."""
+        with self._lock:
+            t_clean = title.strip().lower()
+            prev_len = len(self.queue)
+            self.queue = [j for j in self.queue if j.title.strip().lower() != t_clean or j.status == "running"]
+            removed = prev_len - len(self.queue)
+            self._save_state()
+        return {"status": "ok", "removed_count": removed, "message": f"Removed '{title}' from queue."}
+
+    def add_batch_to_queue(self, candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Add multiple candidate titles and their files into the queue in a single batch."""
+        total_added = 0
+        with self._lock:
+            existing_jobs = {os.path.normpath(j.file_path): j for j in self.queue}
+            for cand in candidates:
+                title = cand.get("title", "")
+                files = cand.get("files") or cand.get("file_samples") or []
+                if not files and cand.get("sample_path"):
+                    files = [{
+                        "path": cand["sample_path"],
+                        "size_bytes": cand.get("total_size_bytes", 0)
+                    }]
+                for f in files:
+                    raw_p = f.get("path") if isinstance(f, dict) else str(f)
+                    if not raw_p:
+                        continue
+                    p = os.path.normpath(raw_p)
+                    if p in existing_jobs:
+                        job = existing_jobs[p]
+                        if job.status in ["failed", "cancelled"]:
+                            job.status = "pending"
+                            job.error_message = None
+                            job.progress_pct = 0.0
+                            job.current_fps = 0.0
+                            job.current_speed = "0.0x"
+                            job.eta_seconds = 0
+                            total_added += 1
+                        continue
+
+                    sz = f.get("size_bytes", 0) if isinstance(f, dict) else 0
+                    if not sz:
+                        try:
+                            sz = os.path.getsize(p)
+                        except Exception:
+                            sz = 0
+                    proj = int(sz * 0.35) if sz > 0 else 0
+                    job_id = f"job_{int(time.time()*1000)}_{total_added}"
+                    job = TranscodeJob(
+                        job_id=job_id,
+                        title=title,
+                        file_path=p,
+                        original_size_bytes=sz,
+                        projected_size_bytes=proj
+                    )
+                    self.queue.append(job)
+                    existing_jobs[p] = job
+                    total_added += 1
+
+            self._save_state()
+
+        return {
+            "status": "ok",
+            "added_count": total_added,
+            "message": f"Successfully queued {total_added} file(s) across selected titles.",
+            "total_queue": len(self.queue)
+        }
+
     def clear_queue(self) -> Dict[str, Any]:
         """Clear all non-running items from the queue."""
         with self._lock:
