@@ -2813,9 +2813,9 @@ body {
 
 .optimizer-table th {
   background: #101521 !important;
-  padding: 10px 14px;
+  padding: 7px 12px;
   text-align: left;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -2829,7 +2829,7 @@ body {
 }
 
 .optimizer-table td {
-  padding: 10px 14px;
+  padding: 7px 12px;
   border-bottom: 1px solid rgba(255,255,255,0.04);
   vertical-align: middle;
   overflow: hidden;
@@ -2856,9 +2856,9 @@ body {
 }
 
 .title-poster-thumb {
-  width: 34px;
-  height: 50px;
-  border-radius: 5px;
+  width: 28px;
+  height: 40px;
+  border-radius: 4px;
   background: rgba(255,255,255,0.04);
   object-fit: cover;
   flex-shrink: 0;
@@ -2868,14 +2868,14 @@ body {
 .title-info-meta {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
   overflow: hidden;
   flex: 1;
 }
 
 .title-main-name {
-  font-size: 0.86rem;
+  font-size: 0.83rem;
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
@@ -2935,6 +2935,56 @@ body {
 .codec-pill-hevc  { background: rgba(16,185,129,0.12); color: #34D399; border: 1px solid rgba(16,185,129,0.28); }
 .codec-pill { background: rgba(99,102,241,0.12); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.25); }
 .codec-pill-audio { background: rgba(59,130,246,0.12); color: #93C5FD; border: 1px solid rgba(59,130,246,0.25); }
+
+/* ── In-Queue Badge (slim pill with pulsing dot + hover-reveal dismiss) ──── */
+.opt-inqueue-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 6px;
+  background: rgba(229,160,13,0.08);
+  border: 1px solid rgba(229,160,13,0.3);
+  border-radius: 20px;
+  font-size: 0.73rem;
+  font-weight: 600;
+  color: #D4A017;
+  white-space: nowrap;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.opt-inqueue-badge:hover {
+  background: rgba(229,160,13,0.13);
+  border-color: rgba(229,160,13,0.5);
+}
+
+.opt-inqueue-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #E5A00D;
+  animation: pulse-dot 2s infinite;
+  flex-shrink: 0;
+}
+
+.opt-inqueue-remove {
+  background: none;
+  border: none;
+  color: rgba(229,160,13,0.4);
+  font-size: 0.72rem;
+  cursor: pointer;
+  padding: 0 0 0 2px;
+  line-height: 1;
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity var(--transition-fast), transform var(--transition-fast), color var(--transition-fast);
+}
+.opt-inqueue-badge:hover .opt-inqueue-remove {
+  opacity: 1;
+  transform: scale(1);
+  color: #EF4444;
+}
+.opt-inqueue-remove:hover {
+  color: #f87171 !important;
+}
 
 /* Preset Modal Styles */
 .preset-info-banner {

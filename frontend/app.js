@@ -3141,11 +3141,14 @@ function renderOptimizerTable() {
             <span class="badge" style="background: rgba(59, 130, 246, 0.2); color: #60A5FA; border: 1px solid rgba(59, 130, 246, 0.4); font-weight: 600; padding: 4px 8px; border-radius: 4px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 3px;" title="Actively transcoding now">⚡ Encoding (${pct}%)</span>
           </div>`;
       } else if (queueMatch.status === 'pending') {
-        rowQueuedStyle = 'background: rgba(229, 160, 13, 0.05);';
+        rowQueuedStyle = 'background: rgba(229, 160, 13, 0.03);';
         actionsHtml = `
           <div class="opt-actions-wrap">
-            <span class="badge" style="background: rgba(229, 160, 13, 0.2); color: var(--plex-gold); border: 1px solid rgba(229, 160, 13, 0.4); font-weight: 600; padding: 4px 8px; border-radius: 4px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px;" title="Currently in transcode queue">⏳ In Queue</span>
-            <button type="button" class="btn btn-secondary btn-icon-compact" onclick="unqueueOptimizerTitle(decodeURIComponent('${encodeURIComponent(it.title)}'), this)" title="Remove '${escapeHtml(it.title).replace(/'/g, "\\'")}' from queue" style="color: #EF4444; border-color: rgba(239, 68, 68, 0.3);">✕</button>
+            <span class="opt-inqueue-badge" title="In transcode queue — click ✕ to remove">
+              <span class="opt-inqueue-dot"></span>
+              In Queue
+              <button type="button" class="opt-inqueue-remove" onclick="unqueueOptimizerTitle(decodeURIComponent('${encodeURIComponent(it.title)}'), this.closest('td').querySelector('.opt-inqueue-badge'))" title="Remove from queue">✕</button>
+            </span>
           </div>`;
       } else {
         actionsHtml = `
@@ -3177,10 +3180,10 @@ function renderOptimizerTable() {
           <span class="badge ${it.type === 'tv' ? 'badge-primary' : 'badge-accent'}">${it.type === 'tv' ? 'TV Series' : 'Movie'}</span>
         </td>
         <td style="text-align: left;">
-          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 3px;">
+          <div style="display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px;">
             <span class="codec-pill ${vBadgeClass}">${escapeHtml(it.primary_video_codec)}</span>
             <span class="codec-pill codec-pill-audio">${escapeHtml(it.primary_audio_codec)}</span>
-            ${it.is_remux ? '<span class="badge" style="font-size: 0.7rem; background: rgba(229,160,13,0.2); color: var(--plex-gold);">REMUX</span>' : ''}
+            ${it.is_remux ? '<span class="badge" style="font-size: 0.66rem; background: rgba(229,160,13,0.15); color: var(--plex-gold); border: 1px solid rgba(229,160,13,0.25);">REMUX</span>' : ''}
           </div>
         </td>
         <td style="text-align: left; font-weight: 600;">
@@ -3203,11 +3206,11 @@ function renderOptimizerTable() {
   }).join('');
 }
 
-window.unqueueOptimizerTitle = async function(title, btnElem) {
+window.unqueueOptimizerTitle = async function(title, badgeOrBtn) {
   try {
-    if (btnElem) {
-      btnElem.disabled = true;
-      btnElem.textContent = '...';
+    if (badgeOrBtn) {
+      badgeOrBtn.style.opacity = '0.5';
+      badgeOrBtn.style.pointerEvents = 'none';
     }
     const res = await fetch('/api/transcode/queue/remove_title', {
       method: 'POST',
@@ -3223,16 +3226,16 @@ window.unqueueOptimizerTitle = async function(title, btnElem) {
       await fetchTranscodeStatus();
     } else {
       alert('Error removing title: ' + (data.message || 'Unknown error'));
-      if (btnElem) {
-        btnElem.disabled = false;
-        btnElem.textContent = '✕';
+      if (badgeOrBtn) {
+        badgeOrBtn.style.opacity = '';
+        badgeOrBtn.style.pointerEvents = '';
       }
     }
   } catch (err) {
     alert('Failed to remove from queue: ' + err.message);
-    if (btnElem) {
-      btnElem.disabled = false;
-      btnElem.textContent = '✕';
+    if (badgeOrBtn) {
+      badgeOrBtn.style.opacity = '';
+      badgeOrBtn.style.pointerEvents = '';
     }
   }
 };
