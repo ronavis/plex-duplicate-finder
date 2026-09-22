@@ -2972,11 +2972,10 @@ body {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: rgba(229,160,13,0.2);
-  border: none;
-  color: rgba(229,160,13,0.7);
-  font-size: 0.62rem;
-  font-weight: 700;
+  background: rgba(229,160,13,0.18);
+  color: rgba(200,130,0,0.85);
+  font-size: 0.6rem;
+  font-weight: 800;
   line-height: 1;
   cursor: pointer;
   padding: 0;
@@ -2986,14 +2985,63 @@ body {
   transition: opacity var(--transition-fast), transform var(--transition-fast),
               background var(--transition-fast), color var(--transition-fast);
   flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .opt-inqueue-badge:hover .opt-inqueue-remove {
   opacity: 1;
   transform: scale(1);
 }
 .opt-inqueue-remove:hover {
-  background: rgba(239,68,68,0.25) !important;
-  color: #f87171 !important;
+  background: rgba(239,68,68,0.28);
+  color: #fca5a5;
+}
+
+/* ── Opt-table action buttons — cohesive 26px tall group ─────────────────── */
+.btn-opt-queue {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 0.73rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+  background: rgba(16,185,129,0.12);
+  border: 1px solid rgba(16,185,129,0.4);
+  color: #34D399;
+  transition: all var(--transition-fast);
+}
+.btn-opt-queue:hover {
+  background: rgba(16,185,129,0.22);
+  border-color: rgba(16,185,129,0.7);
+  color: #6ee7b7;
+}
+.btn-opt-queue:active {
+  background: rgba(16,185,129,0.3);
+}
+
+.btn-opt-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 0;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text-muted);
+  transition: all var(--transition-fast);
+}
+.btn-opt-icon:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.2);
+  color: var(--text-primary);
 }
 
 /* Preset Modal Styles */

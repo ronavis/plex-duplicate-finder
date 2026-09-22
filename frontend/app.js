@@ -3144,24 +3144,26 @@ function renderOptimizerTable() {
         rowQueuedStyle = 'background: rgba(229, 160, 13, 0.03);';
         actionsHtml = `
           <div class="opt-actions-wrap">
-            <span class="opt-inqueue-badge" title="In transcode queue — click ✕ to remove">
+            <span class="opt-inqueue-badge" title="In transcode queue — hover to remove">
               <span class="opt-inqueue-dot"></span>
               In Queue
-              <button type="button" class="opt-inqueue-remove" onclick="unqueueOptimizerTitle(decodeURIComponent('${encodeURIComponent(it.title)}'), this.closest('td').querySelector('.opt-inqueue-badge'))" title="Remove from queue">✕</button>
+              <span class="opt-inqueue-remove" role="button" tabindex="0"
+                onclick="unqueueOptimizerTitle(decodeURIComponent('${encodeURIComponent(it.title)}'), this.closest('.opt-inqueue-badge'))"
+                title="Remove from queue">&#x2715;</span>
             </span>
           </div>`;
       } else {
         actionsHtml = `
           <div class="opt-actions-wrap">
-            <button type="button" class="btn btn-secondary btn-xs" style="color: #EF4444; border-color: rgba(239, 68, 68, 0.4);" onclick="queueOptimizerTitle(decodeURIComponent('${encodeURIComponent(it.title)}'), decodeURIComponent('${encodeURIComponent(it.id)}'), this)" title="Retry queueing this title">🔄 Re-Queue</button>
+            <button type="button" class="btn btn-secondary btn-xs" style="color: #EF4444; border-color: rgba(239,68,68,0.35);" onclick="queueOptimizerTitle(decodeURIComponent('${encodeURIComponent(it.title)}'), decodeURIComponent('${encodeURIComponent(it.id)}'), this)" title="Retry queueing this title">↺ Re-Queue</button>
           </div>`;
       }
     } else {
       actionsHtml = `
         <div class="opt-actions-wrap">
-          <button type="button" class="btn btn-primary btn-xs" style="background: linear-gradient(135deg, #059669, #10B981); font-weight: 600;" onclick="queueOptimizerTitle(decodeURIComponent('${encodeURIComponent(it.title)}'), decodeURIComponent('${encodeURIComponent(it.id)}'), this)" title="Queue all files in this title for optimization">➕ Queue</button>
-          <button type="button" class="btn btn-secondary btn-icon-compact" onclick="runOptimizerTest(decodeURIComponent('${encodeURIComponent(it.title)}'), decodeURIComponent('${encodeURIComponent(it.id)}'))" title="Test Intel QSV 15s transcode preview">⚡</button>
-          <button type="button" class="btn btn-secondary btn-icon-compact" onclick="viewOptimizerPreset(decodeURIComponent('${encodeURIComponent(it.title)}'))" title="View FFmpeg/Handbrake transcode profile">⚙</button>
+          <button type="button" class="btn-opt-queue" onclick="queueOptimizerTitle(decodeURIComponent('${encodeURIComponent(it.title)}'), decodeURIComponent('${encodeURIComponent(it.id)}'), this)" title="Queue for optimization">+ Queue</button>
+          <button type="button" class="btn-opt-icon" onclick="runOptimizerTest(decodeURIComponent('${encodeURIComponent(it.title)}'), decodeURIComponent('${encodeURIComponent(it.id)}'))" title="15s QSV test transcode">⚡</button>
+          <button type="button" class="btn-opt-icon" onclick="viewOptimizerPreset(decodeURIComponent('${encodeURIComponent(it.title)}'))" title="View FFmpeg preset">⚙</button>
         </div>`;
     }
 
