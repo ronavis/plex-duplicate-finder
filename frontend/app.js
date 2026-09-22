@@ -3195,7 +3195,7 @@ function renderOptimizerTable() {
         <td style="text-align: left;">
           <div class="badge-reclaim" style="align-items: flex-start;">
             <span class="badge-reclaim-amount">+${it.reclaimable_human}</span>
-            <span class="badge-reclaim-pct">-${it.savings_pct}%</span>
+            <span class="badge-reclaim-pct">+${it.savings_pct}%</span>
           </div>
         </td>
         <td style="text-align: center;">
@@ -3765,7 +3765,7 @@ window.runOptimizerTest = async function(title, candidateId) {
       if (testStatOrigSize) testStatOrigSize.textContent = `Original: ${data.orig_size_human}`;
       if (testStatNewBitrate) testStatNewBitrate.textContent = `${data.new_bitrate_kbps} kbps`;
       if (testStatNewSize) testStatNewSize.textContent = `Projected: ${data.projected_new_size_human}`;
-      if (testStatSavingsPct) testStatSavingsPct.textContent = `-${data.savings_pct}%`;
+      if (testStatSavingsPct) testStatSavingsPct.textContent = `+${data.savings_pct}%`;
       if (testStatReclaimed) testStatReclaimed.textContent = `Reclaims ~${data.reclaimed_estimate_human}`;
       if (testStatSpeed) testStatSpeed.textContent = data.effective_speed;
       if (testStatTime) testStatTime.textContent = `${data.test_duration_sec}s clip processed in ${data.encoding_time_sec}s`;

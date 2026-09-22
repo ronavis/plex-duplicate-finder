@@ -2966,23 +2966,33 @@ body {
 }
 
 .opt-inqueue-remove {
-  background: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(229,160,13,0.2);
   border: none;
-  color: rgba(229,160,13,0.4);
-  font-size: 0.72rem;
-  cursor: pointer;
-  padding: 0 0 0 2px;
+  color: rgba(229,160,13,0.7);
+  font-size: 0.62rem;
+  font-weight: 700;
   line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 1px;
   opacity: 0;
-  transform: scale(0.7);
-  transition: opacity var(--transition-fast), transform var(--transition-fast), color var(--transition-fast);
+  transform: scale(0.5);
+  transition: opacity var(--transition-fast), transform var(--transition-fast),
+              background var(--transition-fast), color var(--transition-fast);
+  flex-shrink: 0;
 }
 .opt-inqueue-badge:hover .opt-inqueue-remove {
   opacity: 1;
   transform: scale(1);
-  color: #EF4444;
 }
 .opt-inqueue-remove:hover {
+  background: rgba(239,68,68,0.25) !important;
   color: #f87171 !important;
 }
 
