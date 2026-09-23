@@ -189,6 +189,8 @@ const btnMigratorCancel = document.getElementById('btn-migrator-cancel');
 
 // Init
 document.addEventListener('DOMContentLoaded', () => {
+  // Explicitly clear search so browser autocomplete can't pre-fill it and hide results
+  if (inputSearchTitle) { inputSearchTitle.value = ''; searchQuery = ''; }
   loadDrives();
   setupEventListeners();
   initScanState();
