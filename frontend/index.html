@@ -183,8 +183,8 @@
         <div class="section-header">
           <div class="section-title-group">
             <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
-              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
             </svg>
             <h2>Duplicate Candidates</h2>
             <span id="badge-groups-count" class="badge badge-accent">0 Groups</span>
@@ -246,10 +246,30 @@
 
         <!-- Groups Container -->
         <div id="duplicate-groups-list" class="duplicate-groups-list">
-          <div class="empty-state">
-            <div class="empty-icon">🎬</div>
-            <h3>No Duplicates Scanned Yet</h3>
-            <p>Select your drives above and click <strong>Start Fast Scan</strong> to detect duplicates across your Plex storage.</p>
+          <div class="prescan-definitions">
+            <div class="prescan-def-card prescan-exact">
+              <div class="prescan-def-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M9 12l2 2 4-4"/>
+                </svg>
+              </div>
+              <div class="prescan-def-body">
+                <h4>Exact Matches</h4>
+                <p>Files that are <strong>byte-for-byte identical</strong> — same title, same encoding, same source. Safe to delete one copy with zero quality impact. Common when the same rip lands in multiple library folders.</p>
+              </div>
+            </div>
+            <div class="prescan-def-card prescan-quality">
+              <div class="prescan-def-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+              </div>
+              <div class="prescan-def-body">
+                <h4>Quality Variations</h4>
+                <p>The <strong>same title at different quality levels</strong> — e.g. a 4K BluRay alongside a 1080p WEB-DL. Plex keeps both playable for different devices, but you may only need the best copy. Review before deleting.</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
