@@ -309,7 +309,8 @@ body {
 }
 
 .btn-lg {
-  padding: 12px 24px;
+  height: 46px;
+  padding: 0 24px;
   font-size: 1rem;
 }
 
@@ -557,8 +558,74 @@ body {
 /* Scan Controls */
 .scan-controls-bar {
   display: flex;
-  align-items: flex-end;
-  gap: 20px;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* Inline pill: "Min Size [ 50 ] MB" — same height as btn-lg */
+.scan-inline-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  height: 46px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  transition: border-color var(--transition-fast);
+}
+.scan-inline-control:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(229,160,13,0.08);
+}
+
+.scan-inline-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0 10px 0 14px;
+  white-space: nowrap;
+  user-select: none;
+  border-right: 1px solid rgba(255,255,255,0.07);
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+}
+
+.scan-inline-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+}
+
+.scan-inline-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  width: 54px;
+  padding: 0 6px 0 10px;
+  text-align: right;
+  -moz-appearance: textfield;
+}
+.scan-inline-input::-webkit-inner-spin-button,
+.scan-inline-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.scan-inline-unit {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0 14px 0 4px;
+  user-select: none;
 }
 
 .control-group {

@@ -137,19 +137,19 @@
         </div>
 
         <div class="scan-controls-bar">
-          <div class="control-group">
-            <label for="input-min-size">Min File Size</label>
-            <div class="input-addon-wrapper">
-              <input type="number" id="input-min-size" value="50" min="1" max="10000" class="input-control">
-              <span class="addon">MB</span>
+          <div class="scan-inline-control">
+            <label for="input-min-size" class="scan-inline-label">Min Size</label>
+            <div class="scan-inline-input-wrap">
+              <input type="number" id="input-min-size" value="50" min="1" max="10000" class="scan-inline-input">
+              <span class="scan-inline-unit">MB</span>
             </div>
           </div>
 
           <div class="scan-button-group">
             <button id="btn-start-scan" class="btn btn-primary btn-lg">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" class="btn-icon">
+                <circle cx="11" cy="11" r="7" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
               <span>Start Fast Scan</span>
             </button>
