@@ -880,11 +880,22 @@ class TranscodeQueueManager:
         """Execute FFmpeg transcoding on an individual file with verification."""
         orig_path = job.file_path
 
-        # 0. Pre-flight read verification to instantly catch Win32 I/O errors
+        # 0a. ISO / disc-image guard — FFmpeg cannot read raw disc images.
+        #     Mark as skipped immediately with a clear explanation.
+        if orig_path.lower().endswith('.iso'):
+            job.status = "skipped"
+            job.error_message = (
+                "Disc image (.iso) files cannot be transcoded directly. "
+                "Mount the ISO or rip the BDMV/VIDEO_TS folder first."
+            )
+            logger.warning(f"Skipping ISO disc image: {orig_path}")
+            return
+
+        # 0b. Pre-flight read verification to instantly catch Win32 I/O errors
         is_readable, read_err = verify_file_readable(orig_path)
         if not is_readable:
             job.status = "failed"
-            job.error_message = f"Drive read error on {job.drive}: {read_err}"
+            job.error_message = f"Drive I/O error on {job.drive}: {read_err}"
             logger.error(f"Pre-flight check failed for {orig_path}: {read_err}")
             return
 
@@ -916,10 +927,9 @@ class TranscodeQueueManager:
             "-i", orig_path,
             "-map", "0:v:0",
             "-map", "0:a?",
-            "-map", "0:s?",
+            "-sn",            # drop all subtitle streams — avoids 'codec 94213 not supported' on image-based subs
             *video_args,
             *audio_args,
-            "-c:s", "copy",
             "-progress", "pipe:1",
             temp_out
         ]
