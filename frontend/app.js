@@ -3250,7 +3250,7 @@ window.viewOptimizerPreset = async function(title) {
     const res = await fetch(`/api/optimizer/preset?title=${encodeURIComponent(title)}`);
     const data = await res.json();
     if (data.status === 'ok') {
-      if (presetModalTitle) presetModalTitle.textContent = `Intel QuickSync Profile: ${data.item_title}`;
+      if (presetModalTitle) presetModalTitle.textContent = `NVIDIA NVENC Profile: ${data.item_title}`;
       if (presetModalHardware) presetModalHardware.textContent = data.gpu_hardware;
       if (presetFfmpegCode) presetFfmpegCode.textContent = data.ffmpeg_qsv_command;
 

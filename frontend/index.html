@@ -1016,8 +1016,8 @@
                 <div class="sort-wrapper">
                   <label for="select-transcode-encoder">Encoder:</label>
                   <select id="select-transcode-encoder" class="input-control select-control" style="width: auto; min-width: 170px;">
-                    <option value="hevc_qsv">⚡ Intel QuickSync HEVC (Hardware)</option>
-                    <option value="h264_qsv">⚡ Intel QuickSync H.264 (Hardware)</option>
+                    <option value="hevc_nvenc">⚡ NVIDIA NVENC HEVC (Hardware)</option>
+                    <option value="h264_nvenc">⚡ NVIDIA NVENC H.264 (Hardware)</option>
                     <option value="libx265">💻 CPU Software x265 (HEVC)</option>
                     <option value="libx264">💻 CPU Software x264 (AVC)</option>
                   </select>
@@ -1071,7 +1071,7 @@
 
         <div class="modal-footer">
           <div class="optimizer-footer-left" id="optimizer-footer-summary">
-            Hardware: <strong>Intel QuickSync N150 hevc_qsv</strong> &bull; Zero CPU Load
+            Hardware: <strong>NVIDIA 3080 Ti hevc_nvenc</strong> &bull; Zero CPU Load
           </div>
           <button id="btn-modal-optimizer-close-footer" class="btn btn-secondary">Close</button>
         </div>
@@ -1084,7 +1084,7 @@
         <div class="modal-header">
           <div class="modal-title">
             <span style="color: #10B981; font-size: 1.3rem;">⚡</span>
-            <h3 id="test-modal-title">Intel QuickSync Test Preview</h3>
+            <h3 id="test-modal-title">NVIDIA NVENC Test Preview</h3>
           </div>
           <button id="btn-modal-test-close" class="modal-close-btn">&times;</button>
         </div>
@@ -1139,14 +1139,14 @@
         <div class="modal-header">
           <div class="modal-title">
             <span style="color: #10B981; font-size: 1.3rem;">⚡</span>
-            <h3 id="preset-modal-title">Intel QuickSync Transcode Profile</h3>
+            <h3 id="preset-modal-title">NVIDIA NVENC Transcode Profile</h3>
           </div>
           <button id="btn-modal-preset-close" class="modal-close-btn">&times;</button>
         </div>
         <div class="modal-body">
           <div class="preset-info-banner">
             <div style="font-weight: 600; color: #10B981; margin-bottom: 4px;">Hardware Acceleration Profile:</div>
-            <div id="preset-modal-hardware" style="color: var(--text-primary); font-size: 0.95rem;">Intel(R) N150 UHD Graphics (Gen 12 Xe-LP QuickSync)</div>
+            <div id="preset-modal-hardware" style="color: var(--text-primary); font-size: 0.95rem;">NVIDIA GeForce RTX 3080 Ti (NVENC)</div>
             <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 4px;">Hardware ASIC encoding delivers ~150 - 250 FPS with ~0% CPU load.</div>
           </div>
 
