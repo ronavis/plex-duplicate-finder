@@ -26,6 +26,34 @@ TEST_PREVIEW_FILE = os.path.join("scratch", "preview_test.mkv")
 ENCODER_DEFINITIONS = [
     {
         "id": "hevc_qsv",
+        "name": "Intel QuickSync HEVC (Hardware)",
+        "badge": "⚡ Intel QuickSync HEVC (Hardware)",
+        "codec": "hevc",
+        "is_hardware": True,
+        "vendor": "Intel",
+        "description": "Intel QuickSync hardware HEVC encoder.",
+        "presets": {
+            "high_quality": {"flags": ["-c:v", "hevc_qsv", "-global_quality", "19", "-preset", "medium"], "label": "High Quality (Q19 - ~50% savings)"},
+            "balanced": {"flags": ["-c:v", "hevc_qsv", "-global_quality", "23", "-preset", "medium"], "label": "Balanced (Q23 - ~65% savings)"},
+            "max_savings": {"flags": ["-c:v", "hevc_qsv", "-global_quality", "28", "-preset", "medium"], "label": "Max Space Savings (Q28 - ~75% savings)"}
+        }
+    },
+    {
+        "id": "h264_qsv",
+        "name": "Intel QuickSync H.264 (Hardware)",
+        "badge": "⚡ Intel QuickSync H.264 (Hardware)",
+        "codec": "h264",
+        "is_hardware": True,
+        "vendor": "Intel",
+        "description": "Intel QuickSync hardware H.264 encoder.",
+        "presets": {
+            "high_quality": {"flags": ["-c:v", "h264_qsv", "-global_quality", "19", "-preset", "medium"], "label": "High Quality (Q19 - ~35% savings)"},
+            "balanced": {"flags": ["-c:v", "h264_qsv", "-global_quality", "23", "-preset", "medium"], "label": "Balanced (Q23 - ~45% savings)"},
+            "max_savings": {"flags": ["-c:v", "h264_qsv", "-global_quality", "28", "-preset", "medium"], "label": "Max Space Savings (Q28 - ~55% savings)"}
+        }
+    },
+    {
+        "id": "hevc_qsv",
         "name": "Intel QuickSync HEVC (Hardware - Recommended)",
         "badge": "⚡ Intel QSV HEVC (Hardware)",
         "codec": "hevc",
@@ -229,7 +257,7 @@ def get_encoder_video_args(encoder_id: str, preset_name: str) -> Tuple[List[str]
 def get_encoder_global_args(encoder_id: str) -> List[str]:
     """Return device init flags if required by the encoder."""
     if encoder_id.endswith("_qsv"):
-        return ["-init_hw_device", "qsv=hw"]
+        return ["-hwaccel", "auto", "-init_hw_device", "qsv=hw"]
     return []
 
 
@@ -507,6 +535,8 @@ class TranscodeQueueManager:
 
         self.ffmpeg_path, self.ffprobe_path = find_binaries()
         self.available_encoders = detect_available_encoders(self.ffmpeg_path)
+        if not any(e["id"] == "hevc_qsv" for e in self.available_encoders):
+            self.available_encoders.insert(0, {"id": "hevc_qsv", "name": "Intel QuickSync (HEVC)", "is_hardware": True, "codec": "hevc"})
         self.selected_encoder = get_default_encoder(self.available_encoders)
         self.has_qsv = any(e["id"].endswith("_qsv") for e in self.available_encoders)
 
@@ -908,6 +938,13 @@ class TranscodeQueueManager:
 
         # 1. Get source duration for progress tracking
         source_meta = get_media_info(self.ffprobe_path, orig_path)
+        
+        if source_meta and "streams" in source_meta:
+            for stream in source_meta["streams"]:
+                for side_data in stream.get("side_data_list", []):
+                    if "DOVI" in side_data.get("side_data_type", "").upper():
+                        logger.warning(f"Job {job['id']} skipped: Dolby Vision is not supported by QSV.")
+                        raise Exception("Skipped: Dolby Vision is not supported by QSV hardware decoder.")
         total_duration_sec = 0.0
         if source_meta and "format" in source_meta:
             try:
@@ -924,6 +961,8 @@ class TranscodeQueueManager:
             self.ffmpeg_path,
             "-y",
             *global_args,
+            "-analyzeduration", "100000000",
+            "-probesize", "100000000",
             "-i", orig_path,
             "-map", "0:v:0",
             "-map", "0:a?",
