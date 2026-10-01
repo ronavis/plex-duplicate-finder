@@ -187,7 +187,7 @@ def detect_available_encoders(ffmpeg_path: Optional[str], force_refresh: bool = 
         enc_id = enc_def["id"]
         cmd = [
             ffmpeg_path, "-y",
-            "-f", "lavfi", "-i", "color=c=black:s=64x64:d=0.04",
+            "-f", "lavfi", "-i", "color=c=black:s=256x256:d=0.04",
             "-c:v", enc_id,
             "-frames:v", "1",
             "-f", "null", "-"
@@ -263,19 +263,20 @@ def get_encoder_global_args(encoder_id: str) -> List[str]:
 
 def find_binaries() -> Tuple[Optional[str], Optional[str]]:
     """Locate ffmpeg and ffprobe on the system."""
-    # 1. Check WinGet Gyan.FFmpeg install location
+    # 1. Check WinGet Gyan.FFmpeg install locations dynamically
     local_app_data = os.environ.get("LOCALAPPDATA", "")
     if local_app_data:
-        winget_path = os.path.join(
-            local_app_data,
-            "Microsoft", "WinGet", "Packages",
-            "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe",
-            "ffmpeg-7.1-full_build", "bin"
-        )
-        ff_bin = os.path.join(winget_path, "ffmpeg.exe")
-        pr_bin = os.path.join(winget_path, "ffprobe.exe")
-        if os.path.exists(ff_bin) and os.path.exists(pr_bin):
-            return ff_bin, pr_bin
+        winget_pkgs = os.path.join(local_app_data, "Microsoft", "WinGet", "Packages")
+        if os.path.isdir(winget_pkgs):
+            try:
+                for entry in os.listdir(winget_pkgs):
+                    if "Gyan.FFmpeg" in entry:
+                        pkg_dir = os.path.join(winget_pkgs, entry)
+                        for root, _, files in os.walk(pkg_dir):
+                            if "ffmpeg.exe" in files and "ffprobe.exe" in files:
+                                return os.path.join(root, "ffmpeg.exe"), os.path.join(root, "ffprobe.exe")
+            except Exception:
+                pass
 
     # 2. Check system PATH
     sys_ffmpeg = shutil.which("ffmpeg")
@@ -283,8 +284,30 @@ def find_binaries() -> Tuple[Optional[str], Optional[str]]:
     if sys_ffmpeg and sys_ffprobe:
         return sys_ffmpeg, sys_ffprobe
 
-    # 3. Fallback search common paths
-    for root in [r"C:\Program Files\ffmpeg\bin", r"C:\ffmpeg\bin"]:
+    # 3. Check Windows Registry PATH
+    try:
+        import winreg
+        for hkey in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+            try:
+                subkey = r"Environment" if hkey == winreg.HKEY_CURRENT_USER else r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
+                with winreg.OpenKey(hkey, subkey) as key:
+                    path_val, _ = winreg.QueryValueEx(key, "Path")
+                    for p in path_val.split(os.pathsep):
+                        ff_bin = os.path.join(p, "ffmpeg.exe")
+                        pr_bin = os.path.join(p, "ffprobe.exe")
+                        if os.path.exists(ff_bin) and os.path.exists(pr_bin):
+                            return ff_bin, pr_bin
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # 4. Fallback search common paths
+    for root in [
+        r"C:\Program Files\ffmpeg\bin",
+        r"C:\ffmpeg\bin",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin")
+    ]:
         ff_bin = os.path.join(root, "ffmpeg.exe")
         pr_bin = os.path.join(root, "ffprobe.exe")
         if os.path.exists(ff_bin) and os.path.exists(pr_bin):
@@ -556,6 +579,10 @@ class TranscodeQueueManager:
                 self.safety_mode = data.get("safety_mode", "recycle_bin")
                 self.quality_preset = data.get("quality_preset", "balanced")
                 self.total_reclaimed_bytes = data.get("total_reclaimed_bytes", 0)
+                # Compute actual sum of positive reclaimed bytes from completed items
+                completed_reclaimed = sum(j.reclaimed_bytes for j in self.queue if j.status == "completed" and j.reclaimed_bytes > 0)
+                if completed_reclaimed > 0:
+                    self.total_reclaimed_bytes = completed_reclaimed
                 self.total_completed_count = data.get("total_completed_count", 0)
                 saved_enc = data.get("selected_encoder")
                 if saved_enc and any(e["id"] == saved_enc for e in self.available_encoders):
@@ -601,6 +628,13 @@ class TranscodeQueueManager:
     def get_status(self) -> Dict[str, Any]:
         """Return live status of the transcode engine, encoders, and queue."""
         with self._lock:
+            if not self.ffmpeg_path:
+                self.ffmpeg_path, self.ffprobe_path = find_binaries()
+                if self.ffmpeg_path:
+                    self.available_encoders = detect_available_encoders(self.ffmpeg_path, force_refresh=True)
+                    self.has_qsv = check_qsv_support(self.ffmpeg_path)
+                    if not self.selected_encoder or not any(e["id"] == self.selected_encoder for e in self.available_encoders):
+                        self.selected_encoder = self.available_encoders[0]["id"] if self.available_encoders else None
             pending_count = len([j for j in self.queue if j.status == "pending"])
             completed_count = len([j for j in self.queue if j.status == "completed"])
             failed_count = len([j for j in self.queue if j.status == "failed"])
@@ -788,6 +822,23 @@ class TranscodeQueueManager:
             self._save_state()
         return {"status": "ok", "message": "Queue cleared."}
 
+    def retry_all_failed(self) -> Dict[str, Any]:
+        """Reset all failed and cancelled jobs back to pending status."""
+        reset_count = 0
+        with self._lock:
+            for j in self.queue:
+                if j.status in ("failed", "cancelled"):
+                    j.status = "pending"
+                    j.error_message = None
+                    j.progress_pct = 0.0
+                    j.current_fps = 0.0
+                    j.current_speed = "0.0x"
+                    j.eta_seconds = 0
+                    reset_count += 1
+            if reset_count > 0:
+                self._save_state()
+        return {"status": "ok", "reset_count": reset_count, "message": f"Reset {reset_count} job(s) to pending."}
+
     def retry_job(self, job_id: str) -> Dict[str, Any]:
         """Reset a failed or cancelled job back to pending status."""
         with self._lock:
@@ -828,20 +879,33 @@ class TranscodeQueueManager:
     def start_queue(self) -> Dict[str, Any]:
         """Start or resume queue processing worker."""
         if not self.ffmpeg_path:
+            self.ffmpeg_path, self.ffprobe_path = find_binaries()
+            if self.ffmpeg_path:
+                self.available_encoders = detect_available_encoders(self.ffmpeg_path, force_refresh=True)
+                self.has_qsv = check_qsv_support(self.ffmpeg_path)
+        if not self.ffmpeg_path:
             return {"status": "error", "message": "FFmpeg not detected on system."}
 
         with self._lock:
             pending_jobs = [j for j in self.queue if j.status == "pending"]
             if not pending_jobs:
-                if any(j.status == "failed" for j in self.queue):
+                failed_jobs = [j for j in self.queue if j.status in ("failed", "cancelled")]
+                if failed_jobs:
+                    # Automatically reset all failed/cancelled jobs to pending and begin
+                    for j in failed_jobs:
+                        j.status = "pending"
+                        j.error_message = None
+                        j.progress_pct = 0.0
+                        j.current_fps = 0.0
+                        j.current_speed = "0.0x"
+                        j.eta_seconds = 0
+                    self._save_state()
+                    pending_jobs = [j for j in self.queue if j.status == "pending"]
+                else:
                     return {
                         "status": "error",
-                        "message": "All items in queue have failed. Click the retry icon (🔄) on a job or add new items with '+ Queue' before starting."
+                        "message": "Transcode queue is empty. Please add items using '+ Queue' in the Advisor tab first."
                     }
-                return {
-                    "status": "error",
-                    "message": "Transcode queue is empty. Please add items using '+ Queue' in the Advisor tab first."
-                }
 
             self.is_paused = False
             if self.is_running and self._worker_thread and self._worker_thread.is_alive():
@@ -929,7 +993,21 @@ class TranscodeQueueManager:
             logger.error(f"Pre-flight check failed for {orig_path}: {read_err}")
             return
 
+        if os.path.exists(orig_path):
+            try:
+                curr_sz = os.path.getsize(orig_path)
+                if curr_sz > 0:
+                    job.original_size_bytes = curr_sz
+                    job.original_size_human = scanner.format_bytes(curr_sz)
+            except Exception:
+                pass
+
         temp_out, is_staged = get_transcode_staging_path(orig_path, job.original_size_bytes)
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(temp_out)), exist_ok=True)
+        except Exception as e:
+            logger.warning(f"Could not create staging directory for {temp_out}: {e}")
+
         if os.path.exists(temp_out):
             try:
                 os.remove(temp_out)
@@ -1063,14 +1141,26 @@ class TranscodeQueueManager:
                 return
 
             if process.returncode != 0:
-                err_text = "".join(list(stderr_lines)[-15:]) if stderr_lines else "Unknown error"
+                raw_lines = [l.strip() for l in stderr_lines if l.strip()]
+                meaningful_lines = [
+                    l for l in raw_lines
+                    if not l.startswith("Metadata:")
+                    and not l.startswith("Stream #")
+                    and not l.startswith("_STATISTICS")
+                    and not l.startswith("encoder ")
+                    and not l.startswith("Duration:")
+                    and not l.startswith("Side data:")
+                    and not l.startswith("Chapters:")
+                    and not l.startswith("Chapter #")
+                ]
+                err_text = " | ".join(meaningful_lines[-3:]) if meaningful_lines else (" | ".join(raw_lines[-3:]) if raw_lines else "Unknown error")
                 job.status = "failed"
                 if process.returncode in (4294967274, -22) or "Invalid argument" in err_text:
                     job.error_message = f"Drive I/O error on {job.drive}: (WinError 1117 / Invalid argument). The physical disk reported an I/O device error or needs repair."
                 elif "I/O error" in err_text or "Input/output error" in err_text:
                     job.error_message = f"Drive I/O interruption on {job.drive}: (USB read/write latency timeout or disconnect)."
                 else:
-                    job.error_message = f"FFmpeg failed (code {process.returncode}): {err_text[:300]}"
+                    job.error_message = f"FFmpeg error (code {process.returncode}): {err_text[:300]}"
                 if os.path.exists(temp_out):
                     try:
                         os.remove(temp_out)
@@ -1092,7 +1182,26 @@ class TranscodeQueueManager:
 
             # 4. Safe Atomic Replacement
             new_sz = os.path.getsize(temp_out)
-            reclaimed = max(0, job.original_size_bytes - new_sz)
+            reclaimed = job.original_size_bytes - new_sz
+
+            # Space Guarantee: Never replace if the transcoded output ended up larger than original!
+            if reclaimed < 0:
+                if os.path.exists(temp_out):
+                    try:
+                        os.remove(temp_out)
+                    except Exception:
+                        pass
+                job.status = "skipped"
+                size_diff = abs(reclaimed)
+                job.error_message = (
+                    f"Preserved original: Transcoded file was {scanner.format_bytes(size_diff)} "
+                    f"larger than original ({scanner.format_bytes(job.original_size_bytes)} -> {scanner.format_bytes(new_sz)}). "
+                    f"Replacement skipped to protect disk space."
+                )
+                job.reclaimed_bytes = 0
+                job.reclaimed_human = "0.00 B (Preserved smaller original)"
+                logger.info(f"Skipping replacement of {orig_path}: output was {scanner.format_bytes(size_diff)} larger than original.")
+                return
 
             replace_ok, replace_msg = self._safe_replace_file(orig_path, temp_out)
             if not replace_ok:
@@ -1184,6 +1293,11 @@ class TranscodeQueueManager:
         encoder: Optional[str] = None
     ) -> Dict[str, Any]:
         """Run a fast test transcode snippet and return metrics for UI preview."""
+        if not self.ffmpeg_path:
+            self.ffmpeg_path, self.ffprobe_path = find_binaries()
+            if self.ffmpeg_path:
+                self.available_encoders = detect_available_encoders(self.ffmpeg_path, force_refresh=True)
+                self.has_qsv = check_qsv_support(self.ffmpeg_path)
         if not self.ffmpeg_path:
             return {"status": "error", "message": "FFmpeg not detected on system."}
         if not os.path.exists(file_path):

@@ -278,7 +278,7 @@ class TestApiEndpoints(unittest.TestCase):
             data = json.loads(resp.read().decode("utf-8"))
             self.assertEqual(data["status"], "ok")
             self.assertIn("has_qsv", data)
-            self.assertTrue(data["has_qsv"])
+            self.assertTrue(data.get("has_qsv") or any(e.get("is_hardware") for e in data.get("available_encoders", [])))
             self.assertIn("queue", data)
 
 

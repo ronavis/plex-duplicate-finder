@@ -227,13 +227,19 @@ def compute_sparse_hash(file_path: str, sample_size: int = 65536) -> str:
         return f"err_{e}"
 
 
-def format_bytes(bytes_count: int) -> str:
-    """Format bytes into readable string (e.g. 14.2 GB)."""
+def format_bytes(bytes_count: int | float) -> str:
+    """Format bytes into readable string (e.g. 14.20 GB, 512.00 KB, -25.40 MB)."""
+    if bytes_count is None or bytes_count == 0:
+        return "0.00 B"
+    is_neg = bytes_count < 0
+    val = abs(float(bytes_count))
     for unit in ["B", "KB", "MB", "GB", "TB"]:
-        if bytes_count < 1024.0 or unit == "TB":
-            return f"{bytes_count:.2f} {unit}"
-        bytes_count /= 1024.0
-    return f"{bytes_count:.2f} TB"
+        if val < 1024.0 or unit == "TB":
+            res = f"{val:.2f} {unit}"
+            return f"-{res}" if is_neg else res
+        val /= 1024.0
+    res = f"{val:.2f} TB"
+    return f"-{res}" if is_neg else res
 
 
 class MediaScanner:

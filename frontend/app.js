@@ -863,14 +863,17 @@ function formatDate(timestamp) {
 }
 
 function formatBytes(bytes) {
-  if (!bytes) return '0.00 B';
+  if (bytes === null || bytes === undefined || bytes === 0) return '0.00 B';
+  const isNeg = bytes < 0;
+  let val = Math.abs(bytes);
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   let i = 0;
-  while (bytes >= 1024 && i < units.length - 1) {
-    bytes /= 1024;
+  while (val >= 1024 && i < units.length - 1) {
+    val /= 1024;
     i++;
   }
-  return `${bytes.toFixed(2)} ${units[i]}`;
+  const formatted = `${val.toFixed(2)} ${units[i]}`;
+  return isNeg ? `-${formatted}` : formatted;
 }
 
 // Ultra-fast In-Place Selection & Action Delegator
@@ -3626,15 +3629,40 @@ function renderQueueTable(queue) {
     return;
   }
 
-  queueItemsTbody.innerHTML = queue.map(j => {
+    queueItemsTbody.innerHTML = queue.map(j => {
     let statusBadge = '';
+    let reclaimedDisplay = '-';
+    let reclaimedStyle = 'color: #10B981; font-weight: 600;';
+
     if (j.status === 'completed') {
-      statusBadge = `<span class="badge badge-accent" style="background: rgba(16, 185, 129, 0.15); color: #10B981;">✓ Completed (+${j.reclaimed_human})</span>`;
+      const recBytes = j.reclaimed_bytes != null ? j.reclaimed_bytes : ((j.original_size_bytes || 0) - (j.new_size_bytes || 0));
+      const recStr = j.reclaimed_human || formatBytes(recBytes);
+
+      if (recBytes > 0) {
+        const cleanRec = recStr.replace(/^\+/, '');
+        statusBadge = `<span class="badge badge-accent" style="background: rgba(16, 185, 129, 0.15); color: #10B981;">✓ Completed (+${cleanRec})</span>`;
+        reclaimedDisplay = `+${cleanRec}`;
+        reclaimedStyle = 'color: #10B981; font-weight: 600;';
+      } else if (recBytes < 0) {
+        const negStr = recStr.startsWith('-') ? recStr : `-${recStr}`;
+        statusBadge = `<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #F59E0B;" title="Transcoded file is larger than original by ${formatBytes(Math.abs(recBytes))}">✓ Completed (${negStr})</span>`;
+        reclaimedDisplay = negStr;
+        reclaimedStyle = 'color: #F59E0B; font-weight: 600;';
+      } else {
+        statusBadge = `<span class="badge" style="background: rgba(156, 163, 175, 0.15); color: #9CA3AF;">✓ Completed (No change)</span>`;
+        reclaimedDisplay = '0.00 B';
+        reclaimedStyle = 'color: var(--text-secondary); font-weight: 500;';
+      }
     } else if (j.status === 'running') {
       const etaSub = j.eta_seconds > 0 ? ` &bull; ETA: ~${j.eta_human || formatEtaDuration(j.eta_seconds)}` : '';
       statusBadge = `<span class="badge badge-primary" style="background: rgba(229,160,13,0.2); color: var(--plex-gold);">⚡ Running (${j.progress_pct}%${etaSub})</span>`;
     } else if (j.status === 'failed') {
       statusBadge = `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #EF4444; cursor: pointer;" onclick="alert('Transcode Error Details:\\n\\nFile: ${escapeHtml(j.filename).replace(/'/g, "\\'")}\\n\\nError: ${escapeHtml(j.error_message || 'Unknown error').replace(/'/g, "\\'")}')" title="Click to view error details: ${escapeHtml(j.error_message || '')}">✕ Failed ℹ</span>`;
+    } else if (j.status === 'skipped') {
+      const skipMsg = j.error_message || "Skipped replacement to protect disk space.";
+      statusBadge = `<span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38BDF8; cursor: pointer;" onclick="alert('Transcode Guard Details:\\n\\n${escapeHtml(j.filename).replace(/'/g, "\\'")}\\n\\n${escapeHtml(skipMsg).replace(/'/g, "\\'")}')" title="${escapeHtml(skipMsg)}">??? Kept Original</span>`;
+      reclaimedDisplay = "0.00 B";
+      reclaimedStyle = "color: #38BDF8; font-weight: 500;";
     } else if (j.status === 'cancelled') {
       statusBadge = `<span class="badge" style="background: rgba(156, 163, 175, 0.2); color: #9CA3AF;">Skipped</span>`;
     } else {
@@ -3654,7 +3682,7 @@ function renderQueueTable(queue) {
         <td style="text-align: left;"><strong>${j.drive ? j.drive + ':' : '-'}</strong></td>
         <td style="text-align: left; font-weight: 600;">${j.original_size_human}</td>
         <td style="text-align: left; color: var(--text-secondary);">${j.status === 'completed' ? j.new_size_human : formatBytes(j.projected_size_bytes)}</td>
-        <td style="text-align: left; color: #10B981; font-weight: 600;">${j.status === 'completed' ? '+' + j.reclaimed_human : '-'}</td>
+        <td style="text-align: left; ${reclaimedStyle}">${reclaimedDisplay}</td>
         <td style="text-align: left;">
           <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px;">
             ${statusBadge}
@@ -3674,6 +3702,24 @@ function renderQueueTable(queue) {
     `;
   }).join('');
 }
+
+window.retryAllFailedJobs = async function() {
+  try {
+    showToast("Resetting failed jobs to pending...");
+    const res = await fetch("/api/transcode/queue/retry_all", {
+      method: "POST"
+    });
+    const data = await res.json();
+    if (data.status === "ok") {
+      showToast(data.message || "Failed jobs reset to pending.");
+      fetchTranscodeStatus();
+    } else {
+      alert(data.message || "Failed to reset jobs.");
+    }
+  } catch (e) {
+    alert("Error retrying jobs: " + e.message);
+  }
+};
 
 window.retryQueueJob = async function(jobId) {
   try {
