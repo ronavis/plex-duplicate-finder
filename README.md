@@ -22,6 +22,10 @@ Engineered specifically for large-scale multi-terabyte Plex media libraries (100
   - **Recycle Bin Integration**: Deleted files are sent directly to the Windows Recycle Bin by default, allowing full recovery.
   - **Quarantine Mode**: Optionally move duplicates into a designated `_quarantine` directory on each drive.
   - **Dry Run & Confirmation**: Always preview total space reclaimed before executing any deletion.
+- **🎥 Hardware Accelerated Transcoding**:
+  - Built-in In-App Transcode Queue using Intel QuickSync (`hevc_qsv`), NVIDIA NVENC, AMD AMF, and x265.
+  - Test snippets (15s) to preview visual quality and projected space savings before committing.
+  - Safely drops problematic subtitle streams (`-sn`) during transcoding to prevent crashes on image-based PGS subs.
 - **🖥️ Plex-Inspired Localhost Web UI**:
   - Dark mode aesthetic with Plex gold accents.
   - Interactive drive selector cards showing real-time disk capacity and health.
@@ -35,6 +39,9 @@ Engineered specifically for large-scale multi-terabyte Plex media libraries (100
 ```
 plex-duplicate-finder/
 ├── scanner.py          # High-speed disk scanner & media parser
+├── transcoder.py       # Hardware accelerated transcoding engine
+├── optimizer.py        # Space optimization advisor logic
+├── pool_migrator.py    # Smart drive offloader and migrator
 ├── server.py           # Localhost HTTP REST API server
 ├── requirements.txt    # Python dependencies
 ├── frontend/
