@@ -26,6 +26,7 @@ Engineered specifically for large-scale multi-terabyte Plex media libraries (100
   - Built-in In-App Transcode Queue using Intel QuickSync (`hevc_qsv`), NVIDIA NVENC, AMD AMF, and x265.
   - Test snippets (15s) to preview visual quality and projected space savings before committing.
   - Safely drops problematic subtitle streams (`-sn`) during transcoding to prevent crashes on image-based PGS subs.
+  - Skips unsupported Dolby Vision Profile 7 REMUX files to prevent hardware decoder hangs.
 - **🖥️ Plex-Inspired Localhost Web UI**:
   - Dark mode aesthetic with Plex gold accents.
   - Interactive drive selector cards showing real-time disk capacity and health.
