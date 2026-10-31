@@ -16,6 +16,18 @@ from typing import Any
 # Ensure local directory is in path
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
 
+# Support pythonw.exe execution where stdout/stderr are None
+if sys.stdout is None:
+    try:
+        sys.stdout = open(Path(__file__).parent / "server.log", "a", encoding="utf-8")
+    except Exception:
+        pass
+if sys.stderr is None:
+    try:
+        sys.stderr = open(Path(__file__).parent / "server.log", "a", encoding="utf-8")
+    except Exception:
+        pass
+
 import json
 import threading
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
