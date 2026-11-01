@@ -1,6 +1,6 @@
-# 🎬 Plex Space Reclaimer
+# 🎬 Plex Space Reclaimer (Plex Space Saver)
 
-A high-performance localhost web application designed to scan, detect, compare, and safely delete duplicate Movies and TV Shows across multiple storage drives (NTFS, exFAT, NAS).
+A high-performance localhost web application and background service designed to scan, detect, compare, transcode, and safely delete duplicate Movies and TV Shows across multiple storage drives (NTFS, exFAT, NAS).
 
 Engineered specifically for large-scale multi-terabyte Plex media libraries (100+ TB) where naive hashing is impractical.
 
@@ -22,16 +22,21 @@ Engineered specifically for large-scale multi-terabyte Plex media libraries (100
   - **Recycle Bin Integration**: Deleted files are sent directly to the Windows Recycle Bin by default, allowing full recovery.
   - **Quarantine Mode**: Optionally move duplicates into a designated `_quarantine` directory on each drive.
   - **Dry Run & Confirmation**: Always preview total space reclaimed before executing any deletion.
-- **🎥 Hardware Accelerated Transcoding**:
-  - Built-in In-App Transcode Queue using Intel QuickSync (`hevc_qsv`), NVIDIA NVENC, AMD AMF, and x265.
-  - Test snippets (15s) to preview visual quality and projected space savings before committing.
+  - **Audit Logging**: Persistent records in `deletion_audit.json` with item details and reclaimable space metrics.
+- **🎥 Hardware-Accelerated Transcoding**:
+  - Built-in In-App Transcode Queue using Intel QuickSync (`hevc_qsv`), NVIDIA NVENC (`hevc_nvenc`), AMD AMF, and CPU `libx265`.
+  - Generates 15-second test preview snippets to compare visual quality and projected space savings before processing entire libraries.
   - Safely drops problematic subtitle streams (`-sn`) during transcoding to prevent crashes on image-based PGS subs.
-  - Skips unsupported Dolby Vision Profile 7 REMUX files to prevent hardware decoder hangs.
-- **🖥️ Plex-Inspired Localhost Web UI**:
-  - Dark mode aesthetic with Plex gold accents.
-  - Interactive drive selector cards showing real-time disk capacity and health.
-  - Side-by-side comparison cards for duplicates with quality badges.
-  - One-click smart selection ("Select lower resolution", "Keep newest", "Select by drive").
+  - Skips unsupported Dolby Vision Profile 7 REMUX files to avoid hardware decoder hangs.
+- **🧹 Drive Offloader & Library Cleaner**:
+  - **Drive Offloader / Migrator**: Moves non-duplicate movies and series to secondary storage to free up primary drives.
+  - **Library Cleaner**: Scans for and removes orphan folders, tiny sample clips, and leftover junk metadata.
+- **🖥️ Plex-Inspired Web UI & Desktop Integration**:
+  - Dark mode aesthetic with official Plex gold styling.
+  - Interactive drive cards showing real-time capacity and health.
+  - Side-by-side comparison cards with quality badges and one-click smart filters.
+  - **Desktop Shortcut & Custom Logo**: Double-clickable desktop shortcut with a high-res custom icon (`plex_space_saver.ico`).
+  - **Windows Boot Auto-Start**: Runs silently as a background service via `pythonw.exe` on system reboot with no intrusive terminal popups.
 
 ---
 
@@ -39,16 +44,26 @@ Engineered specifically for large-scale multi-terabyte Plex media libraries (100
 
 ```
 plex-duplicate-finder/
-├── scanner.py          # High-speed disk scanner & media parser
-├── transcoder.py       # Hardware accelerated transcoding engine
-├── optimizer.py        # Space optimization advisor logic
-├── pool_migrator.py    # Smart drive offloader and migrator
-├── server.py           # Localhost HTTP REST API server
-├── requirements.txt    # Python dependencies
+├── scanner.py                   # High-speed disk scanner & media parser
+├── media_inspector.py           # Deep stream & codec analysis via ffprobe
+├── transcoder.py                # Hardware-accelerated transcoding engine
+├── optimizer.py                 # Space optimization advisor logic
+├── pool_migrator.py             # Smart drive offloader and library migrator
+├── balancer.py                  # Multi-drive space balancing engine
+├── cleaner.py                   # Empty directory and sample clip cleaner
+├── plex_api.py                  # Plex Server integration & library refresh
+├── tmdb_api.py                  # TMDb artwork and poster caching
+├── server.py                    # Localhost HTTP REST API server (with pythonw support)
+├── launch_plex_space_saver.vbs  # Desktop launcher (checks server & opens browser)
+├── setup_startup_and_desktop.py # One-click installer for desktop icon & boot startup
+├── generate_logo.py             # High-res Windows ICO and PNG logo generator
+├── plex_space_saver.ico         # Multi-resolution Windows application icon
+├── plex_space_saver.png         # High-resolution branding logo
+├── requirements.txt             # Python dependencies
 ├── frontend/
-│   ├── index.html      # Single-page application structure
-│   ├── style.css       # Plex-inspired dark theme styling
-│   └── app.js          # Interactive dashboard & duplicate management
+│   ├── index.html               # Single-page application structure
+│   ├── style.css                # Plex-inspired dark theme styling
+│   └── app.js                   # Interactive dashboard & duplicate management
 ├── .gitignore
 ├── LICENSE
 └── README.md
@@ -61,6 +76,7 @@ plex-duplicate-finder/
 ### 1. Requirements
 - Windows 10/11
 - Python 3.10+ (Standard Library supported out of the box)
+- Optional: `ffmpeg` / `ffprobe` in PATH for hardware transcoding and deep stream inspection.
 
 ### 2. Installation
 Clone the repository:
@@ -74,12 +90,22 @@ Install optional dependencies for enhanced media info and Recycle Bin support:
 pip install -r requirements.txt
 ```
 
-### 3. Running the Web Tool
-Start the localhost server:
+### 3. One-Click Desktop & Startup Setup (Recommended for Windows)
+Run the automated setup script:
+```bash
+python setup_startup_and_desktop.py
+```
+This will automatically:
+1. Place a **Plex Space Saver** double-clickable shortcut with the custom logo on your **Desktop**.
+2. Configure **Windows Startup** (`StartPlexSpaceSaver.vbs`) so the background server boots silently whenever Windows starts.
+3. Start the server immediately in the background on port `8282`.
+
+### 4. Running Manually
+To start the localhost server manually:
 ```bash
 python server.py
 ```
-Open your browser and navigate to:
+Then navigate to:
 ```
 http://localhost:8282
 ```
@@ -88,9 +114,9 @@ http://localhost:8282
 
 ## 🔒 Safety & Data Integrity
 
-- **Never Overwrites**: The scanner is strictly read-only during analysis.
+- **Strictly Read-Only During Scans**: Scanning never alters, touches, or renames files without explicit confirmation.
 - **Reversible Action**: All deletion actions default to the Windows Shell Recycle Bin API (`SHFileOperation`).
-- **Audit Logs**: Every scan and file action is recorded in `scan_history.json` with timestamps, original file paths, and file sizes.
+- **Comprehensive Audit Trail**: Every file deletion and space reclamation is permanently recorded in `deletion_audit.json`.
 
 ---
 
